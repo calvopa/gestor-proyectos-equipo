@@ -15,7 +15,7 @@ router.get('/', (req, res) => {
 
   if (estado) { sql += ' AND estado=?'; params.push(estado); }
   if (prioridad) { sql += ' AND prioridad=?'; params.push(prioridad); }
-  if (search) { sql += ' AND (nombre LIKE ? OR descripcion LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
+  if (search) { sql += ' AND (nombre LIKE ? OR descripcion LIKE ? OR last_comment_text LIKE ?)'; params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
 
   sql += ` ORDER BY ${col} ${order}`;
   res.json(db.prepare(sql).all(...params));

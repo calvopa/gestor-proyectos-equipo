@@ -89,16 +89,21 @@ async function renderProjects({ search = '', estado = '', prioridad = '', sort =
   const main = document.getElementById('main-content');
   const projects = await api.getProjects({ search, estado, prioridad, sort, dir });
 
+  const sortCols = [
+    ['nombre','Nombre'],['estado','Estado'],['prioridad','Prioridad'],
+    ['fecha_fin_est','Vence'],['updated_at','Actualizado']
+  ];
+
   main.innerHTML = `
     <div class="page-header">
-      <h1>Proyectos</h1>
+      <h1>Proyectos <span style="color:var(--text2);font-size:14px;font-weight:400">${projects.length}</span></h1>
       <button class="btn btn-primary" id="btn-new-project">＋ Nuevo proyecto</button>
     </div>
     <div class="filters">
-      <input type="text" id="f-search" placeholder="Buscar..." value="${escHtml(search)}">
+      <input type="text" id="f-search" placeholder="Buscar nombre, comentario..." value="${escHtml(search)}" style="flex:2">
       <select id="f-estado">
         <option value="">Todos los estados</option>
-        ${['backlog','en_curso','pausado','cerrado'].map(e => `<option value="${e}" ${estado===e?'selected':''}>${e}</option>`).join('')}
+        ${['backlog','en_curso','pausado','cerrado'].map(e => `<option value="${e}" ${estado===e?'selected':''}>${e.replace('_',' ')}</option>`).join('')}
       </select>
       <select id="f-prioridad">
         <option value="">Todas las prioridades</option>
@@ -109,26 +114,39 @@ async function renderProjects({ search = '', estado = '', prioridad = '', sort =
       <table>
         <thead>
           <tr>
-            ${[['nombre','Nombre'],['estado','Estado'],['prioridad','Prioridad'],['fecha_inicio','Inicio'],['fecha_fin_est','Fin est.'],['updated_at','Actualizado']].map(([col,label]) =>
-              `<th data-col="${col}" data-dir="${sort===col?(dir==='asc'?'desc':'asc'):'asc'}">${label} ${sort===col?(dir==='asc'?'↑':'↓'):''}</th>`
+            ${sortCols.map(([col,label]) =>
+              `<th data-col="${col}" data-dir="${sort===col?(dir==='asc'?'desc':'asc'):'asc'}">${label}${sort===col?(dir==='asc'?' ↑':' ↓'):''}</th>`
             ).join('')}
+            <th>Último comentario</th>
             <th>Horas</th>
             <th></th>
           </tr>
         </thead>
         <tbody id="projects-tbody">
-          ${projects.length === 0 ? `<tr><td colspan="8"><div class="empty"><div class="empty-icon">📋</div><p>Sin proyectos todavía</p></div></td></tr>` :
-            projects.map(p => `
+          ${projects.length === 0
+            ? `<tr><td colspan="9"><div class="empty"><div class="empty-icon">📋</div><p>Sin proyectos todavía</p></div></td></tr>`
+            : projects.map(p => `
               <tr data-id="${p.id}">
-                <td><a href="#" class="project-link" data-id="${p.id}">${escHtml(p.nombre)}</a>${!p.cuenta_horas ? ' <span class="no-cuenta-badge">sin cómputo</span>' : ''}</td>
+                <td>
+                  <a href="#" class="project-link" data-id="${p.id}" style="font-weight:600">${escHtml(p.nombre)}</a>
+                  ${!p.cuenta_horas ? ' <span class="no-cuenta-badge">sin cómputo</span>' : ''}
+                  ${p.clickup_status ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">${escHtml(p.clickup_status)}</div>` : ''}
+                </td>
                 <td>${badgeEstado(p.estado)}</td>
                 <td>${badgePrio(p.prioridad)}</td>
-                <td>${p.fecha_inicio || '—'}</td>
-                <td>${p.fecha_fin_est || '—'}</td>
-                <td>${p.updated_at ? new Date(p.updated_at).toLocaleDateString('es-AR') : '—'}</td>
-                <td id="hours-${p.id}">—</td>
-                <td>
-                  <button class="btn btn-ghost btn-sm btn-edit-project" data-id="${p.id}">Editar</button>
+                <td style="font-size:12px">${p.fecha_fin_est || '—'}</td>
+                <td style="font-size:12px;color:var(--text2)">${p.updated_at ? new Date(p.updated_at).toLocaleDateString('es-AR') : '—'}</td>
+                <td class="comment-cell">
+                  ${p.last_comment_text
+                    ? `<div class="last-comment">
+                        <div class="lc-text">${escHtml(p.last_comment_text.slice(0, 100))}${p.last_comment_text.length > 100 ? '…' : ''}</div>
+                        <div class="lc-meta">${escHtml(p.last_comment_by || '')}${p.last_comment_at ? ' · ' + new Date(p.last_comment_at).toLocaleDateString('es-AR') : ''}</div>
+                       </div>`
+                    : '<span style="color:var(--text2);font-size:12px">—</span>'}
+                </td>
+                <td id="hours-${p.id}" style="font-size:13px">—</td>
+                <td style="white-space:nowrap">
+                  <button class="btn btn-ghost btn-sm btn-edit-project" data-id="${p.id}">✎</button>
                   <button class="btn btn-danger btn-sm btn-del-project" data-id="${p.id}">✕</button>
                 </td>
               </tr>
@@ -138,44 +156,50 @@ async function renderProjects({ search = '', estado = '', prioridad = '', sort =
     </div>
   `;
 
-  // Load hours async
+  // Horas async
   if (projects.length) {
     api.getTotals().then(({ byProject }) => {
       byProject.forEach(row => {
         const cell = document.getElementById(`hours-${row.id}`);
         if (!cell) return;
-        const display = fmtSec(row.seg_contados);
-        const extra = row.seg_total !== row.seg_contados ? ` <span style="color:var(--text2);font-size:11px">(+${fmtSec(row.seg_total - row.seg_contados)} sin cómputo)</span>` : '';
-        cell.innerHTML = display + extra;
+        const txt = fmtSec(row.seg_contados);
+        const extra = row.seg_total !== row.seg_contados
+          ? `<span style="color:var(--text2);font-size:11px"> (+${fmtSec(row.seg_total - row.seg_contados)})</span>` : '';
+        cell.innerHTML = txt + extra;
       });
     }).catch(() => {});
   }
 
-  // Filters
+  // Filtros
   let searchTimer;
   document.getElementById('f-search').addEventListener('input', e => {
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => renderProjects({ search: e.target.value, estado: document.getElementById('f-estado').value, prioridad: document.getElementById('f-prioridad').value, sort, dir }), 300);
+    searchTimer = setTimeout(() => renderProjects({
+      search: e.target.value,
+      estado: document.getElementById('f-estado').value,
+      prioridad: document.getElementById('f-prioridad').value,
+      sort, dir
+    }), 300);
   });
   document.getElementById('f-estado').addEventListener('change', e =>
     renderProjects({ search: document.getElementById('f-search').value, estado: e.target.value, prioridad: document.getElementById('f-prioridad').value, sort, dir }));
   document.getElementById('f-prioridad').addEventListener('change', e =>
     renderProjects({ search: document.getElementById('f-search').value, estado: document.getElementById('f-estado').value, prioridad: e.target.value, sort, dir }));
 
-  // Sort headers
   main.querySelectorAll('th[data-col]').forEach(th => {
-    th.addEventListener('click', () =>
-      renderProjects({ search: document.getElementById('f-search').value, estado: document.getElementById('f-estado').value, prioridad: document.getElementById('f-prioridad').value, sort: th.dataset.col, dir: th.dataset.dir }));
+    th.addEventListener('click', () => renderProjects({
+      search: document.getElementById('f-search').value,
+      estado: document.getElementById('f-estado').value,
+      prioridad: document.getElementById('f-prioridad').value,
+      sort: th.dataset.col, dir: th.dataset.dir
+    }));
   });
 
   document.getElementById('btn-new-project').addEventListener('click', () => showProjectModal());
-
   main.querySelectorAll('.project-link').forEach(a =>
     a.addEventListener('click', e => { e.preventDefault(); navigate('project-detail', { id: a.dataset.id }); }));
-
   main.querySelectorAll('.btn-edit-project').forEach(b =>
     b.addEventListener('click', () => showProjectModal(b.dataset.id)));
-
   main.querySelectorAll('.btn-del-project').forEach(b =>
     b.addEventListener('click', async () => {
       if (!confirm('¿Eliminar proyecto?')) return;
@@ -353,6 +377,22 @@ async function renderProjectDetail({ id }) {
       </div>
     </div>
 
+    ${p.last_comment_text ? `
+    <div class="card" style="margin-bottom:20px;border-left:3px solid var(--accent)">
+      <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">
+        💬 Último comentario en ClickUp
+        ${p.clickup_status ? `· <span style="color:var(--text2)">${escHtml(p.clickup_status)}</span>` : ''}
+      </div>
+      <div style="font-size:14px;line-height:1.6">${escHtml(p.last_comment_text)}</div>
+      <div style="margin-top:8px;font-size:12px;color:var(--text2)">
+        ${escHtml(p.last_comment_by || '')}
+        ${p.last_comment_at ? '· ' + new Date(p.last_comment_at).toLocaleString('es-AR') : ''}
+      </div>
+    </div>` : p.clickup_id ? `
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px;margin-bottom:20px;font-size:13px;color:var(--text2)">
+      💬 Sin comentarios en ClickUp · Estado: ${escHtml(p.clickup_status || '—')}
+    </div>` : ''}
+
     ${!p.cuenta_horas ? `<div style="background:#3b1f0a;border:1px solid #7c3210;border-radius:var(--radius);padding:10px 14px;margin-bottom:16px;color:#fb923c;font-size:13px">
       ⚠ Este proyecto tiene el cómputo de horas desactivado. Las horas se registran pero <strong>no suman al total contabilizado global</strong>. Activalo en "Editar proyecto" para incluirlas.
     </div>` : ''}
@@ -411,7 +451,11 @@ async function renderProjectDetail({ id }) {
             <div><span style="color:var(--text2)">Inicio</span><br>${p.fecha_inicio || '—'}</div>
             <div><span style="color:var(--text2)">Fin est.</span><br>${p.fecha_fin_est || '—'}</div>
           </div>
-          ${p.clickup_id ? `<div style="margin-top:10px;font-size:12px;color:var(--text2)">ClickUp ID: ${escHtml(p.clickup_id)}</div>` : ''}
+          ${p.clickup_id ? `
+          <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;color:var(--text2)">
+            <div>ClickUp: <a href="https://app.clickup.com/t/${escHtml(p.clickup_id)}" target="_blank" style="color:var(--accent)">ver tarea ↗</a></div>
+            ${p.clickup_status ? `<div style="margin-top:4px">Estado CU: ${escHtml(p.clickup_status)}</div>` : ''}
+          </div>` : ''}
         </div>
       </div>
     </div>
