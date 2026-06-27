@@ -17,6 +17,7 @@ app.use('/api/resources', require('./routes/resources'));
 app.use('/api/time', require('./routes/time'));
 app.use('/api/sync', require('./routes/sync'));
 app.use('/api/settings', require('./routes/settings'));
+app.use('/api/alerts', require('./routes/alerts'));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 

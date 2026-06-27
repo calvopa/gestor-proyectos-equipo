@@ -100,6 +100,7 @@ function diasHtml(p) {
 const routes = {
   'projects':       renderProjects,
   'kanban':         renderKanban,
+  'alerts':         renderAlerts,
   'project-detail': renderProjectDetail,
   'resources':      renderResources,
   'carga':          renderCarga,
@@ -119,7 +120,7 @@ function navigate(route, params = {}) {
   });
 }
 
-// ── Nav / Sync status ──────────────────────────────────────
+// ── Nav / Sync + Alert badge ───────────────────────────────
 async function updateSyncStatus() {
   try {
     const s = await api.getSyncStatus();
@@ -128,6 +129,25 @@ async function updateSyncStatus() {
     dot.className = 'dot ' + (s.configured ? 'ok' : '');
     const last = s.last_sync ? new Date(s.last_sync).toLocaleTimeString('es-AR') : 'nunca';
     txt.textContent = s.configured ? `Sync: ${last}` : 'ClickUp: sin config';
+  } catch {}
+}
+
+async function updateAlertBadge() {
+  try {
+    const data = await api.getAlerts();
+    const badge = document.getElementById('nav-alert-badge');
+    if (!badge) return;
+    if (data.criticas > 0) {
+      badge.textContent = data.criticas;
+      badge.style.display = 'inline-flex';
+      badge.style.background = 'var(--red)';
+    } else if (data.atencion > 0) {
+      badge.textContent = data.atencion;
+      badge.style.display = 'inline-flex';
+      badge.style.background = 'var(--yellow)';
+    } else {
+      badge.style.display = 'none';
+    }
   } catch {}
 }
 
@@ -931,6 +951,103 @@ async function renderSettings() {
   });
 }
 
+// ── ⑦ Alerts ──────────────────────────────────────────────
+async function renderAlerts() {
+  const main = document.getElementById('main-content');
+  const data = await api.getAlerts();
+
+  const TIPO_LABELS = {
+    vencido:           '📅 Fecha vencida',
+    sin_actividad:     '💤 Sin actividad',
+    actividad_escasa:  '🔔 Actividad escasa',
+    proximo_vencer:    '⏰ Próximo a vencer',
+    pausado_largo:     '⏸ Pausado largo',
+    backlog_vencido:   '📋 Backlog vencido',
+    sobrecarga_recurso:'👤 Sobrecarga de recurso',
+  };
+
+  function alertCard(a) {
+    const isProject = !!a.proyecto_id;
+    const nombre    = isProject ? a.proyecto_nombre : a.recurso_nombre;
+    const chipStatus = a.clickup_status
+      ? `<span class="alert-chip">${escHtml(a.clickup_status)}</span>` : '';
+    const chipRol = a.recurso_rol
+      ? `<span class="alert-chip">${escHtml(a.recurso_rol)}</span>` : '';
+
+    return `
+      <div class="alert-card ${a.nivel}"
+           data-project-id="${a.proyecto_id || ''}"
+           data-resource-id="${a.recurso_id || ''}">
+        <div class="alert-dot ${a.nivel}"></div>
+        <div class="alert-body">
+          <div class="alert-title">${TIPO_LABELS[a.tipo] || a.tipo}</div>
+          <div class="alert-proyecto">${escHtml(nombre || '')}</div>
+          <div class="alert-mensaje">${escHtml(a.mensaje)}</div>
+          <div class="alert-meta">
+            ${chipStatus}${chipRol}
+            ${a.clickup_id ? `<a href="https://app.clickup.com/t/${escHtml(a.clickup_id)}" target="_blank" class="alert-chip" style="color:var(--accent)">Ver en ClickUp ↗</a>` : ''}
+          </div>
+        </div>
+        ${isProject ? '<div style="color:var(--text2);font-size:18px;align-self:center">›</div>' : ''}
+      </div>`;
+  }
+
+  const criticas = data.alerts.filter(a => a.nivel === 'critica');
+  const atencion = data.alerts.filter(a => a.nivel === 'atencion');
+
+  main.innerHTML = `
+    <div class="page-header">
+      <h1>Alertas</h1>
+      <button class="btn btn-secondary btn-sm" id="btn-refresh-alerts">↻ Actualizar</button>
+    </div>
+
+    <div class="alert-summary">
+      <div class="alert-sum-card critica">
+        <div class="num">${data.criticas}</div>
+        <div class="lbl">Críticas</div>
+      </div>
+      <div class="alert-sum-card atencion">
+        <div class="num">${data.atencion}</div>
+        <div class="lbl">Con atención</div>
+      </div>
+      <div class="alert-sum-card ok">
+        <div class="num">${data.total === 0 ? '✓' : data.total}</div>
+        <div class="lbl">${data.total === 0 ? 'Todo en orden' : 'Total alertas'}</div>
+      </div>
+    </div>
+
+    ${data.total === 0 ? `
+      <div class="empty">
+        <div class="empty-icon">✅</div>
+        <p>Sin alertas activas. Todos los proyectos están al día.</p>
+      </div>` : ''}
+
+    ${criticas.length ? `
+      <div class="alert-section-title">
+        🔴 Críticas — requieren acción inmediata (${criticas.length})
+      </div>
+      ${criticas.map(alertCard).join('')}` : ''}
+
+    ${atencion.length ? `
+      <div class="alert-section-title">
+        🟡 Atención — revisar esta semana (${atencion.length})
+      </div>
+      ${atencion.map(alertCard).join('')}` : ''}
+  `;
+
+  // Navegar al proyecto al hacer click en la card
+  main.querySelectorAll('.alert-card[data-project-id]').forEach(card => {
+    const pid = card.dataset.projectId;
+    if (!pid) return;
+    card.addEventListener('click', e => {
+      if (e.target.tagName === 'A') return; // no interceptar el link a ClickUp
+      navigate('project-detail', { id: pid });
+    });
+  });
+
+  document.getElementById('btn-refresh-alerts').addEventListener('click', () => navigate('alerts'));
+}
+
 // ── Boot ──────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('nav ul li a[data-route]').forEach(a => {
@@ -946,9 +1063,12 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch(e) { toast(e.message, 'error'); }
     btn.textContent = '↻';
     updateSyncStatus();
+    updateAlertBadge();
   });
 
   navigate('projects');
   updateSyncStatus();
+  updateAlertBadge();
   setInterval(updateSyncStatus, 60000);
+  setInterval(updateAlertBadge, 120000); // refresca badge cada 2 min
 });

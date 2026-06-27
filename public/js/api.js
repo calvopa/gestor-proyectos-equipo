@@ -39,6 +39,9 @@ const api = {
   deleteEntry: (id) => api._fetch(`/api/time/${id}`, { method: 'DELETE' }),
   getTotals: () => api._fetch('/api/time/totals'),
 
+  // Alerts
+  getAlerts: () => api._fetch('/api/alerts'),
+
   // Sync
   syncClickUp: () => api._fetch('/api/sync/clickup', { method: 'POST' }),
   getSyncStatus: () => api._fetch('/api/sync/status'),
