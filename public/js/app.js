@@ -49,6 +49,53 @@ function escHtml(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ── Salud & Actividad ──────────────────────────────────────
+function diasSinActividad(p) {
+  const ref = p.last_comment_at || p.updated_at || p.created_at;
+  if (!ref) return null;
+  return Math.floor((Date.now() - new Date(ref.replace(' ', 'T') + (ref.includes('T') ? '' : 'Z'))) / 86400000);
+}
+
+// Devuelve { level: 'red'|'yellow'|'green'|'grey', titulo, detalle }
+function calcSalud(p) {
+  if (p.estado === 'cerrado') return { level: 'grey',   titulo: 'Cerrado',    detalle: 'Proyecto finalizado' };
+  if (p.estado === 'backlog') return { level: 'grey',   titulo: 'Backlog',    detalle: 'Sin iniciar' };
+
+  const hoy       = Date.now();
+  const dias      = diasSinActividad(p);
+  const vencido   = p.fecha_fin_est && new Date(p.fecha_fin_est) < hoy;
+  const proxVence = p.fecha_fin_est && !vencido && Math.floor((new Date(p.fecha_fin_est) - hoy) / 86400000) <= 5;
+
+  if (p.estado === 'en_curso') {
+    if (vencido)               return { level: 'red',    titulo: 'Vencido',        detalle: `Fecha de entrega superada` };
+    if (dias !== null && dias > 7)  return { level: 'red',    titulo: 'Sin actividad',  detalle: `${dias} días sin comentarios` };
+    if (proxVence)             return { level: 'yellow', titulo: 'Próximo a vencer', detalle: `Vence en ≤ 5 días` };
+    return                            { level: 'green',  titulo: 'Al día',          detalle: 'Activo y con actividad reciente' };
+  }
+
+  if (p.estado === 'pausado') {
+    if (dias !== null && dias > 14) return { level: 'yellow', titulo: 'Pausado largo', detalle: `${dias} días sin actividad` };
+    return                           { level: 'grey',   titulo: 'Pausado',        detalle: 'En pausa' };
+  }
+
+  return { level: 'grey', titulo: '—', detalle: '' };
+}
+
+function semaforoHtml(p) {
+  const s = calcSalud(p);
+  return `<span class="semaforo semaforo-${s.level}" title="${escHtml(s.detalle)}"></span>`;
+}
+
+function diasHtml(p) {
+  if (p.estado === 'cerrado') return '<span style="color:var(--text2)">—</span>';
+  const d = diasSinActividad(p);
+  if (d === null) return '<span style="color:var(--text2)">—</span>';
+  let cls = '';
+  if (d > 7)  cls = 'dias-red';
+  else if (d > 3) cls = 'dias-yellow';
+  return `<span class="dias-badge ${cls}">${d}d</span>`;
+}
+
 // ── Router ─────────────────────────────────────────────────
 const routes = {
   'projects':       renderProjects,
@@ -85,22 +132,34 @@ async function updateSyncStatus() {
 }
 
 // ── ① Projects table ──────────────────────────────────────
-async function renderProjects({ search = '', estado = '', prioridad = '', sort = 'updated_at', dir = 'desc' } = {}) {
+async function renderProjects({ search = '', estado = '', prioridad = '', sort = 'updated_at', dir = 'desc', soloRiesgo = false } = {}) {
   const main = document.getElementById('main-content');
-  const projects = await api.getProjects({ search, estado, prioridad, sort, dir });
+  let projects = await api.getProjects({ search, estado, prioridad, sort, dir });
+
+  // Filtro de riesgo client-side
+  if (soloRiesgo) {
+    projects = projects.filter(p => ['red','yellow'].includes(calcSalud(p).level));
+  }
+
+  // Contadores para el header
+  const enRiesgo  = projects.filter(p => calcSalud(p).level === 'red').length;
+  const atencion  = projects.filter(p => calcSalud(p).level === 'yellow').length;
 
   const sortCols = [
-    ['nombre','Nombre'],['estado','Estado'],['prioridad','Prioridad'],
-    ['fecha_fin_est','Vence'],['updated_at','Actualizado']
+    ['nombre','Nombre'],['estado','Estado'],['prioridad','Prioridad'],['fecha_fin_est','Vence']
   ];
 
   main.innerHTML = `
     <div class="page-header">
-      <h1>Proyectos <span style="color:var(--text2);font-size:14px;font-weight:400">${projects.length}</span></h1>
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <h1>Proyectos <span style="color:var(--text2);font-size:14px;font-weight:400">${projects.length}</span></h1>
+        ${enRiesgo  ? `<span class="alerta-pill alerta-red">🔴 ${enRiesgo} en riesgo</span>` : ''}
+        ${atencion  ? `<span class="alerta-pill alerta-yellow">🟡 ${atencion} con atención</span>` : ''}
+      </div>
       <button class="btn btn-primary" id="btn-new-project">＋ Nuevo proyecto</button>
     </div>
     <div class="filters">
-      <input type="text" id="f-search" placeholder="Buscar nombre, comentario..." value="${escHtml(search)}" style="flex:2">
+      <input type="text" id="f-search" placeholder="Buscar..." value="${escHtml(search)}" style="flex:2">
       <select id="f-estado">
         <option value="">Todos los estados</option>
         ${['backlog','en_curso','pausado','cerrado'].map(e => `<option value="${e}" ${estado===e?'selected':''}>${e.replace('_',' ')}</option>`).join('')}
@@ -109,14 +168,19 @@ async function renderProjects({ search = '', estado = '', prioridad = '', sort =
         <option value="">Todas las prioridades</option>
         ${['baja','media','alta','critica'].map(p => `<option value="${p}" ${prioridad===p?'selected':''}>${p}</option>`).join('')}
       </select>
+      <button class="btn ${soloRiesgo ? 'btn-primary' : 'btn-ghost'} btn-sm" id="f-riesgo" title="Mostrar solo proyectos en riesgo o con atención">
+        ⚠ ${soloRiesgo ? 'Todos' : 'En riesgo'}
+      </button>
     </div>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
+            <th style="width:32px" title="Salud del proyecto">●</th>
             ${sortCols.map(([col,label]) =>
               `<th data-col="${col}" data-dir="${sort===col?(dir==='asc'?'desc':'asc'):'asc'}">${label}${sort===col?(dir==='asc'?' ↑':' ↓'):''}</th>`
             ).join('')}
+            <th data-sort-dias title="Ordenar por días sin actividad">Sin actividad ↕</th>
             <th>Último comentario</th>
             <th>Horas</th>
             <th></th>
@@ -124,33 +188,43 @@ async function renderProjects({ search = '', estado = '', prioridad = '', sort =
         </thead>
         <tbody id="projects-tbody">
           ${projects.length === 0
-            ? `<tr><td colspan="9"><div class="empty"><div class="empty-icon">📋</div><p>Sin proyectos todavía</p></div></td></tr>`
-            : projects.map(p => `
-              <tr data-id="${p.id}">
-                <td>
-                  <a href="#" class="project-link" data-id="${p.id}" style="font-weight:600">${escHtml(p.nombre)}</a>
-                  ${!p.cuenta_horas ? ' <span class="no-cuenta-badge">sin cómputo</span>' : ''}
-                  ${p.clickup_status ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">${escHtml(p.clickup_status)}</div>` : ''}
-                </td>
-                <td>${badgeEstado(p.estado)}</td>
-                <td>${badgePrio(p.prioridad)}</td>
-                <td style="font-size:12px">${p.fecha_fin_est || '—'}</td>
-                <td style="font-size:12px;color:var(--text2)">${p.updated_at ? new Date(p.updated_at).toLocaleDateString('es-AR') : '—'}</td>
-                <td class="comment-cell">
-                  ${p.last_comment_text
-                    ? `<div class="last-comment">
-                        <div class="lc-text">${escHtml(p.last_comment_text.slice(0, 100))}${p.last_comment_text.length > 100 ? '…' : ''}</div>
-                        <div class="lc-meta">${escHtml(p.last_comment_by || '')}${p.last_comment_at ? ' · ' + new Date(p.last_comment_at).toLocaleDateString('es-AR') : ''}</div>
-                       </div>`
-                    : '<span style="color:var(--text2);font-size:12px">—</span>'}
-                </td>
-                <td id="hours-${p.id}" style="font-size:13px">—</td>
-                <td style="white-space:nowrap">
-                  <button class="btn btn-ghost btn-sm btn-edit-project" data-id="${p.id}">✎</button>
-                  <button class="btn btn-danger btn-sm btn-del-project" data-id="${p.id}">✕</button>
-                </td>
-              </tr>
-            `).join('')}
+            ? `<tr><td colspan="10"><div class="empty"><div class="empty-icon">📋</div><p>${soloRiesgo ? 'Sin proyectos en riesgo 🎉' : 'Sin proyectos todavía'}</p></div></td></tr>`
+            : projects.map(p => {
+                const salud = calcSalud(p);
+                const dias  = diasSinActividad(p);
+                return `
+                <tr data-id="${p.id}" class="fila-${salud.level}">
+                  <td style="text-align:center">
+                    ${semaforoHtml(p)}
+                    <div class="semaforo-label">${escHtml(salud.titulo)}</div>
+                  </td>
+                  <td>
+                    <a href="#" class="project-link" data-id="${p.id}" style="font-weight:600">${escHtml(p.nombre)}</a>
+                    ${!p.cuenta_horas ? ' <span class="no-cuenta-badge">sin cómputo</span>' : ''}
+                    ${p.clickup_status ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">${escHtml(p.clickup_status)}</div>` : ''}
+                  </td>
+                  <td>${badgeEstado(p.estado)}</td>
+                  <td>${badgePrio(p.prioridad)}</td>
+                  <td style="font-size:12px">${p.fecha_fin_est || '—'}</td>
+                  <td style="text-align:center" data-dias="${dias ?? 9999}">
+                    ${diasHtml(p)}
+                    ${salud.detalle && salud.level !== 'grey' ? `<div class="semaforo-detalle">${escHtml(salud.detalle)}</div>` : ''}
+                  </td>
+                  <td class="comment-cell">
+                    ${p.last_comment_text
+                      ? `<div class="last-comment">
+                          <div class="lc-text">${escHtml(p.last_comment_text.slice(0, 90))}${p.last_comment_text.length > 90 ? '…' : ''}</div>
+                          <div class="lc-meta">${escHtml(p.last_comment_by || '')}${p.last_comment_at ? ' · ' + new Date(p.last_comment_at).toLocaleDateString('es-AR') : ''}</div>
+                         </div>`
+                      : '<span style="color:var(--text2);font-size:12px">—</span>'}
+                  </td>
+                  <td id="hours-${p.id}" style="font-size:13px">—</td>
+                  <td style="white-space:nowrap">
+                    <button class="btn btn-ghost btn-sm btn-edit-project" data-id="${p.id}">✎</button>
+                    <button class="btn btn-danger btn-sm btn-del-project" data-id="${p.id}">✕</button>
+                  </td>
+                </tr>`;
+              }).join('')}
         </tbody>
       </table>
     </div>
@@ -170,6 +244,21 @@ async function renderProjects({ search = '', estado = '', prioridad = '', sort =
     }).catch(() => {});
   }
 
+  // Ordenar por días sin actividad (client-side)
+  main.querySelector('[data-sort-dias]')?.addEventListener('click', () => {
+    const tbody = document.getElementById('projects-tbody');
+    const rows  = [...tbody.querySelectorAll('tr[data-id]')];
+    let asc = main.querySelector('[data-sort-dias]').dataset.diasDir !== 'asc';
+    main.querySelector('[data-sort-dias]').dataset.diasDir = asc ? 'asc' : 'desc';
+    main.querySelector('[data-sort-dias]').textContent = `Sin actividad ${asc ? '↑' : '↓'}`;
+    rows.sort((a, b) => {
+      const da = parseInt(a.querySelector('[data-dias]')?.dataset.dias ?? 9999);
+      const db = parseInt(b.querySelector('[data-dias]')?.dataset.dias ?? 9999);
+      return asc ? da - db : db - da;
+    });
+    rows.forEach(r => tbody.appendChild(r));
+  });
+
   // Filtros
   let searchTimer;
   document.getElementById('f-search').addEventListener('input', e => {
@@ -178,20 +267,22 @@ async function renderProjects({ search = '', estado = '', prioridad = '', sort =
       search: e.target.value,
       estado: document.getElementById('f-estado').value,
       prioridad: document.getElementById('f-prioridad').value,
-      sort, dir
+      sort, dir, soloRiesgo
     }), 300);
   });
   document.getElementById('f-estado').addEventListener('change', e =>
-    renderProjects({ search: document.getElementById('f-search').value, estado: e.target.value, prioridad: document.getElementById('f-prioridad').value, sort, dir }));
+    renderProjects({ search: document.getElementById('f-search').value, estado: e.target.value, prioridad: document.getElementById('f-prioridad').value, sort, dir, soloRiesgo }));
   document.getElementById('f-prioridad').addEventListener('change', e =>
-    renderProjects({ search: document.getElementById('f-search').value, estado: document.getElementById('f-estado').value, prioridad: e.target.value, sort, dir }));
+    renderProjects({ search: document.getElementById('f-search').value, estado: document.getElementById('f-estado').value, prioridad: e.target.value, sort, dir, soloRiesgo }));
+  document.getElementById('f-riesgo').addEventListener('click', () =>
+    renderProjects({ search: document.getElementById('f-search').value, estado: document.getElementById('f-estado').value, prioridad: document.getElementById('f-prioridad').value, sort, dir, soloRiesgo: !soloRiesgo }));
 
   main.querySelectorAll('th[data-col]').forEach(th => {
     th.addEventListener('click', () => renderProjects({
       search: document.getElementById('f-search').value,
       estado: document.getElementById('f-estado').value,
       prioridad: document.getElementById('f-prioridad').value,
-      sort: th.dataset.col, dir: th.dataset.dir
+      sort: th.dataset.col, dir: th.dataset.dir, soloRiesgo
     }));
   });
 

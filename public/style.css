@@ -399,6 +399,67 @@ textarea { resize: vertical; min-height: 80px; }
 .toast.info    { border-left: 3px solid var(--accent); }
 @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
+/* ── Semáforo de salud ── */
+.semaforo {
+  display: inline-block;
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 2px rgba(0,0,0,.3);
+}
+.semaforo-red    { background: var(--red);    box-shadow: 0 0 6px rgba(239,68,68,.6); }
+.semaforo-yellow { background: var(--yellow); box-shadow: 0 0 6px rgba(234,179,8,.5); }
+.semaforo-green  { background: var(--green);  box-shadow: 0 0 4px rgba(34,197,94,.4); }
+.semaforo-grey   { background: var(--border); }
+
+.semaforo-label {
+  font-size: 10px;
+  color: var(--text2);
+  margin-top: 3px;
+  white-space: nowrap;
+  letter-spacing: -.2px;
+}
+.semaforo-detalle {
+  font-size: 10px;
+  color: var(--text2);
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+/* Tinte de fila según salud */
+tr.fila-red    td { background: rgba(239,68,68,.04); }
+tr.fila-yellow td { background: rgba(234,179,8,.04); }
+tr.fila-red:hover    td { background: rgba(239,68,68,.09); }
+tr.fila-yellow:hover td { background: rgba(234,179,8,.09); }
+
+/* Pills del header */
+.alerta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: default;
+}
+.alerta-pill.alerta-red    { background: rgba(239,68,68,.15);  color: #f87171; border: 1px solid rgba(239,68,68,.3); }
+.alerta-pill.alerta-yellow { background: rgba(234,179,8,.15);  color: #fbbf24; border: 1px solid rgba(234,179,8,.3); }
+
+/* Días sin actividad */
+.dias-badge {
+  display: inline-block;
+  padding: 2px 7px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--bg3);
+  color: var(--text2);
+  border: 1px solid var(--border);
+}
+.dias-badge.dias-yellow { background: rgba(234,179,8,.15);  color: #fbbf24; border-color: rgba(234,179,8,.4); }
+.dias-badge.dias-red    { background: rgba(239,68,68,.15);  color: #f87171; border-color: rgba(239,68,68,.4); }
+
 /* ── Last comment ── */
 .comment-cell { max-width: 280px; }
 .last-comment { }
