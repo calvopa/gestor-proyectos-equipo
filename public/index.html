@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestor de Proyectos</title>
+  <link rel="stylesheet" href="/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="app">
+    <nav>
+      <div class="logo">📂 Proyectos</div>
+      <ul>
+        <li><a href="#" data-route="projects"><span class="icon">📋</span> Proyectos</a></li>
+        <li><a href="#" data-route="kanban"><span class="icon">🗂</span> Kanban</a></li>
+        <li><a href="#" data-route="resources"><span class="icon">👥</span> Recursos</a></li>
+        <li><a href="#" data-route="carga"><span class="icon">📊</span> Carga</a></li>
+        <li><a href="#" data-route="settings"><span class="icon">⚙️</span> Configuración</a></li>
+      </ul>
+      <div class="sync-status">
+        <span class="dot"></span>
+        <span class="sync-txt">Verificando...</span>
+        <button id="btn-sync-nav" class="btn btn-ghost btn-sm" style="margin-top:6px;width:100%" title="Sync ClickUp ahora">↻ Sync</button>
+      </div>
+    </nav>
+    <main>
+      <div id="main-content"></div>
+    </main>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
