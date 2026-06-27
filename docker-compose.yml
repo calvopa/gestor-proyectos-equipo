@@ -18,7 +18,14 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    networks:
+      - default
+      - demos_network
 
 volumes:
   gestor-data:
     name: gestor-proyectos-data
+
+networks:
+  demos_network:
+    external: true
