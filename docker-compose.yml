@@ -12,6 +12,7 @@ services:
       - CLICKUP_TOKEN=${CLICKUP_TOKEN:-}
       - CLICKUP_TEAM_ID=${CLICKUP_TEAM_ID:-}
       - SYNC_INTERVAL_MIN=${SYNC_INTERVAL_MIN:-30}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:${PORT:-3000}/health"]
       interval: 30s

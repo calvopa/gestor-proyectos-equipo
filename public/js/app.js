@@ -106,6 +106,8 @@ const routes = {
   'resources':      renderResources,
   'carga':          renderCarga,
   'settings':       renderSettings,
+  'dashboard':      renderDashboard,
+  'semana':         () => renderSemana(),
 };
 
 function navigate(route, params = {}) {
@@ -308,18 +310,23 @@ async function renderDashboard() {
 }
 
 // ── ① Projects table ──────────────────────────────────────
-async function renderProjects({ search = '', estado = '', prioridad = '', sort = 'updated_at', dir = 'desc', soloRiesgo = false, focusSearch = false } = {}) {
+async function renderProjects({ search = '', estado = '', prioridad = '', fase = '', tecnico = '', sort = 'updated_at', dir = 'desc', soloRiesgo = false, focusSearch = false } = {}) {
   const main = document.getElementById('main-content');
-  let projects = await api.getProjects({ search, estado, prioridad, sort, dir });
+  main.innerHTML = '<div class="spinner"></div>';
 
-  // Filtro de riesgo client-side
+  const [projects, phases, resources] = await Promise.all([
+    api.getProjects({ search, estado, prioridad, fase, tecnico, sort, dir }),
+    api.getPhases(),
+    api.getResources(),
+  ]);
+
+  let filtered = projects;
   if (soloRiesgo) {
-    projects = projects.filter(p => ['red','yellow'].includes(calcSalud(p).level));
+    filtered = filtered.filter(p => ['red','yellow'].includes(calcSalud(p).level));
   }
 
-  // Contadores para el header
-  const enRiesgo  = projects.filter(p => calcSalud(p).level === 'red').length;
-  const atencion  = projects.filter(p => calcSalud(p).level === 'yellow').length;
+  const enRiesgo = filtered.filter(p => calcSalud(p).level === 'red').length;
+  const atencion = filtered.filter(p => calcSalud(p).level === 'yellow').length;
 
   const sortCols = [
     ['nombre','Nombre'],['estado','Estado'],['prioridad','Prioridad'],['fecha_fin_est','Vence']
@@ -328,14 +335,14 @@ async function renderProjects({ search = '', estado = '', prioridad = '', sort =
   main.innerHTML = `
     <div class="page-header">
       <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-        <h1>Proyectos <span style="color:var(--text2);font-size:14px;font-weight:400">${projects.length}</span></h1>
-        ${enRiesgo  ? `<span class="alerta-pill alerta-red">🔴 ${enRiesgo} en riesgo</span>` : ''}
-        ${atencion  ? `<span class="alerta-pill alerta-yellow">🟡 ${atencion} con atención</span>` : ''}
+        <h1>Proyectos <span style="color:var(--text2);font-size:14px;font-weight:400">${filtered.length}</span></h1>
+        ${enRiesgo ? `<span class="alerta-pill alerta-red">🔴 ${enRiesgo} en riesgo</span>` : ''}
+        ${atencion ? `<span class="alerta-pill alerta-yellow">🟡 ${atencion} con atención</span>` : ''}
       </div>
       <button class="btn btn-primary" id="btn-new-project">＋ Nuevo proyecto</button>
     </div>
     <div class="filters">
-      <input type="text" id="f-search" placeholder="Buscar..." value="${escHtml(search)}" style="flex:2">
+      <input type="text" id="f-search" placeholder="Buscar..." value="${escHtml(search)}" style="flex:2;min-width:160px">
       <select id="f-estado">
         <option value="">Todos los estados</option>
         ${['backlog','en_curso','pausado','cerrado'].map(e => `<option value="${e}" ${estado===e?'selected':''}>${e.replace('_',' ')}</option>`).join('')}
@@ -344,7 +351,15 @@ async function renderProjects({ search = '', estado = '', prioridad = '', sort =
         <option value="">Todas las prioridades</option>
         ${['baja','media','alta','critica'].map(p => `<option value="${p}" ${prioridad===p?'selected':''}>${p}</option>`).join('')}
       </select>
-      <button class="btn ${soloRiesgo ? 'btn-primary' : 'btn-ghost'} btn-sm" id="f-riesgo" title="Mostrar solo proyectos en riesgo o con atención">
+      <select id="f-fase">
+        <option value="">Todas las fases</option>
+        ${phases.map(f => `<option value="${escHtml(f)}" ${fase===f?'selected':''}>${escHtml(f)}</option>`).join('')}
+      </select>
+      <select id="f-tecnico">
+        <option value="">Todos los técnicos</option>
+        ${resources.map(r => `<option value="${r.id}" ${tecnico===String(r.id)?'selected':''}>${escHtml(r.nombre)}</option>`).join('')}
+      </select>
+      <button class="btn ${soloRiesgo ? 'btn-primary' : 'btn-ghost'} btn-sm" id="f-riesgo" title="Mostrar solo en riesgo o con atención">
         ⚠ ${soloRiesgo ? 'Todos' : 'En riesgo'}
       </button>
     </div>
@@ -352,22 +367,24 @@ async function renderProjects({ search = '', estado = '', prioridad = '', sort =
       <table>
         <thead>
           <tr>
-            <th style="width:32px" title="Salud del proyecto">●</th>
+            <th style="width:32px" title="Salud">●</th>
             ${sortCols.map(([col,label]) =>
               `<th data-col="${col}" data-dir="${sort===col?(dir==='asc'?'desc':'asc'):'asc'}">${label}${sort===col?(dir==='asc'?' ↑':' ↓'):''}</th>`
             ).join('')}
             <th data-sort-dias title="Ordenar por días sin actividad">Sin actividad ↕</th>
+            <th>Técnicos</th>
             <th>Último comentario</th>
             <th>Horas</th>
             <th></th>
           </tr>
         </thead>
         <tbody id="projects-tbody">
-          ${projects.length === 0
-            ? `<tr><td colspan="10"><div class="empty"><div class="empty-icon">📋</div><p>${soloRiesgo ? 'Sin proyectos en riesgo 🎉' : 'Sin proyectos todavía'}</p></div></td></tr>`
-            : projects.map(p => {
+          ${filtered.length === 0
+            ? `<tr><td colspan="11"><div class="empty"><div class="empty-icon">📋</div><p>${soloRiesgo ? 'Sin proyectos en riesgo 🎉' : 'Sin proyectos todavía'}</p></div></td></tr>`
+            : filtered.map(p => {
                 const salud = calcSalud(p);
                 const dias  = diasSinActividad(p);
+                const tecs  = p.tecnicos ? p.tecnicos.split(',').map(t => t.trim()).filter(Boolean) : [];
                 return `
                 <tr data-id="${p.id}" class="fila-${salud.level}">
                   <td style="text-align:center">
@@ -385,6 +402,11 @@ async function renderProjects({ search = '', estado = '', prioridad = '', sort =
                   <td style="text-align:center" data-dias="${dias ?? 9999}">
                     ${diasHtml(p)}
                     ${salud.detalle && salud.level !== 'grey' ? `<div class="semaforo-detalle">${escHtml(salud.detalle)}</div>` : ''}
+                  </td>
+                  <td style="font-size:12px">
+                    ${tecs.length
+                      ? tecs.map(t => `<span class="tec-chip">${escHtml(t)}</span>`).join(' ')
+                      : '<span style="color:var(--text2)">—</span>'}
                   </td>
                   <td class="comment-cell">
                     ${p.last_comment_text
@@ -407,7 +429,7 @@ async function renderProjects({ search = '', estado = '', prioridad = '', sort =
   `;
 
   // Horas async
-  if (projects.length) {
+  if (filtered.length) {
     api.getTotals().then(({ byProject }) => {
       byProject.forEach(row => {
         const cell = document.getElementById(`hours-${row.id}`);
@@ -420,13 +442,25 @@ async function renderProjects({ search = '', estado = '', prioridad = '', sort =
     }).catch(() => {});
   }
 
+  // Helper para leer filtros actuales
+  function getFilters() {
+    return {
+      search:   document.getElementById('f-search')?.value   || '',
+      estado:   document.getElementById('f-estado')?.value   || '',
+      prioridad:document.getElementById('f-prioridad')?.value|| '',
+      fase:     document.getElementById('f-fase')?.value     || '',
+      tecnico:  document.getElementById('f-tecnico')?.value  || '',
+    };
+  }
+
   // Ordenar por días sin actividad (client-side)
   main.querySelector('[data-sort-dias]')?.addEventListener('click', () => {
     const tbody = document.getElementById('projects-tbody');
     const rows  = [...tbody.querySelectorAll('tr[data-id]')];
-    let asc = main.querySelector('[data-sort-dias]').dataset.diasDir !== 'asc';
-    main.querySelector('[data-sort-dias]').dataset.diasDir = asc ? 'asc' : 'desc';
-    main.querySelector('[data-sort-dias]').textContent = `Sin actividad ${asc ? '↑' : '↓'}`;
+    const btn   = main.querySelector('[data-sort-dias]');
+    const asc   = btn.dataset.diasDir !== 'asc';
+    btn.dataset.diasDir = asc ? 'asc' : 'desc';
+    btn.textContent = `Sin actividad ${asc ? '↑' : '↓'}`;
     rows.sort((a, b) => {
       const da = parseInt(a.querySelector('[data-dias]')?.dataset.dias ?? 9999);
       const db = parseInt(b.querySelector('[data-dias]')?.dataset.dias ?? 9999);
@@ -435,37 +469,28 @@ async function renderProjects({ search = '', estado = '', prioridad = '', sort =
     rows.forEach(r => tbody.appendChild(r));
   });
 
-  // Filtros
+  // Filtros event listeners
   let searchTimer;
   document.getElementById('f-search').addEventListener('input', e => {
     clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => renderProjects({
-      search: e.target.value,
-      estado: document.getElementById('f-estado').value,
-      prioridad: document.getElementById('f-prioridad').value,
-      sort, dir, soloRiesgo, focusSearch: true
-    }), 300);
+    searchTimer = setTimeout(() => renderProjects({ ...getFilters(), search: e.target.value, sort, dir, soloRiesgo, focusSearch: true }), 300);
   });
 
   // Restaurar foco tras re-render por búsqueda (el input se recrea con innerHTML)
   if (focusSearch) {
     const inp = document.getElementById('f-search');
-    inp.focus();
-    inp.setSelectionRange(inp.value.length, inp.value.length);
+    if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
   }
-  document.getElementById('f-estado').addEventListener('change', e =>
-    renderProjects({ search: document.getElementById('f-search').value, estado: e.target.value, prioridad: document.getElementById('f-prioridad').value, sort, dir, soloRiesgo }));
-  document.getElementById('f-prioridad').addEventListener('change', e =>
-    renderProjects({ search: document.getElementById('f-search').value, estado: document.getElementById('f-estado').value, prioridad: e.target.value, sort, dir, soloRiesgo }));
+  ['f-estado','f-prioridad','f-fase','f-tecnico'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', () =>
+      renderProjects({ ...getFilters(), sort, dir, soloRiesgo }));
+  });
   document.getElementById('f-riesgo').addEventListener('click', () =>
-    renderProjects({ search: document.getElementById('f-search').value, estado: document.getElementById('f-estado').value, prioridad: document.getElementById('f-prioridad').value, sort, dir, soloRiesgo: !soloRiesgo }));
+    renderProjects({ ...getFilters(), sort, dir, soloRiesgo: !soloRiesgo }));
 
   main.querySelectorAll('th[data-col]').forEach(th => {
     th.addEventListener('click', () => renderProjects({
-      search: document.getElementById('f-search').value,
-      estado: document.getElementById('f-estado').value,
-      prioridad: document.getElementById('f-prioridad').value,
-      sort: th.dataset.col, dir: th.dataset.dir, soloRiesgo
+      ...getFilters(), sort: th.dataset.col, dir: th.dataset.dir, soloRiesgo
     }));
   });
 
@@ -479,7 +504,7 @@ async function renderProjects({ search = '', estado = '', prioridad = '', sort =
       if (!confirm('¿Eliminar proyecto?')) return;
       await api.deleteProject(b.dataset.id);
       toast('Proyecto eliminado', 'success');
-      renderProjects({ search, estado, prioridad, sort, dir });
+      renderProjects({ search, estado, prioridad, fase, tecnico, sort, dir });
     }));
 }
 
@@ -1214,6 +1239,197 @@ async function renderAlerts() {
   });
 
   document.getElementById('btn-refresh-alerts').addEventListener('click', () => navigate('alerts'));
+}
+
+// ── ⑧ Dashboard ejecutivo ─────────────────────────────────
+async function renderDashboard() {
+  const main = document.getElementById('main-content');
+  main.innerHTML = '<div class="spinner"></div>';
+  const d = await api.getDashboard();
+
+  function bar(items, labelKey, countKey, color) {
+    if (!items || !items.length) return '<p style="color:var(--text2);font-size:12px">Sin datos</p>';
+    const max = Math.max(...items.map(i => i[countKey]));
+    return items.slice(0, 10).map(item => {
+      const pct = max > 0 ? Math.round((item[countKey] / max) * 100) : 0;
+      return `
+        <div style="margin-bottom:9px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:72%">${escHtml(String(item[labelKey]))}</span>
+            <span style="color:var(--text2);flex-shrink:0;margin-left:6px;font-weight:600">${item[countKey]}</span>
+          </div>
+          <div style="background:var(--bg3);border-radius:3px;height:7px;overflow:hidden">
+            <div style="width:${pct}%;height:100%;background:${color};border-radius:3px"></div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function prioColor(p) {
+    return { critica:'var(--red)', alta:'var(--orange)', media:'var(--accent)', baja:'var(--green)' }[p] || 'var(--accent)';
+  }
+
+  const corte = new Date(d.generated_at).toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' });
+  const syncTxt = d.last_sync ? new Date(d.last_sync).toLocaleString('es-AR', { dateStyle:'short', timeStyle:'short' }) : 'nunca';
+
+  const prios = [
+    { prioridad:'critica', count: d.byPrioridad.critica },
+    { prioridad:'alta',    count: d.byPrioridad.alta    },
+    { prioridad:'media',   count: d.byPrioridad.media   },
+    { prioridad:'baja',    count: d.byPrioridad.baja    },
+  ].filter(p => p.count > 0);
+
+  main.innerHTML = `
+    <div class="dash-header no-print">
+      <div>
+        <h1 style="font-size:20px;font-weight:800">📈 Dashboard ejecutivo</h1>
+        <div style="font-size:12px;color:var(--text2);margin-top:3px">Corte: ${corte} · Última sync ClickUp: ${syncTxt}</div>
+      </div>
+      <button class="btn btn-secondary btn-sm" onclick="window.print()">⬇ Exportar PDF</button>
+    </div>
+    <div class="dash-header print-only" style="display:none">
+      <h1 style="font-size:18px;font-weight:800">Dashboard ejecutivo — Proyectos GCS</h1>
+      <div style="font-size:11px;color:#666">Corte: ${corte} · Sync: ${syncTxt}</div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="dash-kpis">
+      <div class="dash-kpi">
+        <div class="dash-kpi-num">${d.kpis.total}</div>
+        <div class="dash-kpi-lbl">Total</div>
+      </div>
+      <div class="dash-kpi dash-kpi-red">
+        <div class="dash-kpi-num">${d.kpis.red}</div>
+        <div class="dash-kpi-lbl">🔴 En riesgo</div>
+      </div>
+      <div class="dash-kpi dash-kpi-yellow">
+        <div class="dash-kpi-num">${d.kpis.yellow}</div>
+        <div class="dash-kpi-lbl">🟡 Con atención</div>
+      </div>
+      <div class="dash-kpi dash-kpi-green">
+        <div class="dash-kpi-num">${d.kpis.green}</div>
+        <div class="dash-kpi-lbl">🟢 Al día</div>
+      </div>
+      <div class="dash-kpi">
+        <div class="dash-kpi-num" style="color:var(--text2)">${(d.kpis.backlog||0) + (d.kpis.cerrado||0)}</div>
+        <div class="dash-kpi-lbl">Backlog / Cerrado</div>
+      </div>
+    </div>
+
+    <!-- Gráficos -->
+    <div class="dash-charts">
+      <div class="dash-chart-card">
+        <div class="dash-chart-title">Por fase / estado ClickUp</div>
+        ${bar(d.byFase, 'fase', 'count', 'var(--accent)')}
+      </div>
+      <div class="dash-chart-card">
+        <div class="dash-chart-title">Por prioridad</div>
+        ${(() => {
+          const maxP = Math.max(...prios.map(p => p.count), 1);
+          return prios.map(p => `
+            <div style="margin-bottom:9px">
+              <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px">
+                <span style="font-weight:500">${p.prioridad.charAt(0).toUpperCase()+p.prioridad.slice(1)}</span>
+                <span style="color:var(--text2);font-weight:600">${p.count}</span>
+              </div>
+              <div style="background:var(--bg3);border-radius:3px;height:7px;overflow:hidden">
+                <div style="width:${Math.round(p.count/maxP*100)}%;height:100%;background:${prioColor(p.prioridad)};border-radius:3px"></div>
+              </div>
+            </div>`).join('');
+        })()}
+      </div>
+      <div class="dash-chart-card">
+        <div class="dash-chart-title">Carga por técnico</div>
+        ${bar(d.byTecnico.map(t => ({ label: t.nombre, count: t.count })), 'label', 'count', 'var(--green)')}
+      </div>
+    </div>
+
+    <!-- En riesgo -->
+    ${d.enRiesgo.length ? `
+    <div class="dash-section">
+      <div class="dash-section-title">🔴 Proyectos en riesgo (${d.enRiesgo.length})</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Proyecto</th>
+              <th>Fase</th>
+              <th>Prioridad</th>
+              <th>Inactividad</th>
+              <th>Último comentario</th>
+              <th>Técnico(s)</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${d.enRiesgo.map(p => `
+              <tr>
+                <td><a href="#" class="dash-proj-link" data-id="${p.id}" style="font-weight:600;color:var(--accent)">${escHtml(p.nombre)}</a></td>
+                <td style="font-size:12px;color:var(--text2)">${escHtml(p.clickup_status||'—')}</td>
+                <td>${badgePrio(p.prioridad)}</td>
+                <td style="text-align:center">
+                  ${p.dias_vencido !== null
+                    ? `<span class="dias-badge dias-red">Vencido ${p.dias_vencido}d</span>`
+                    : p.dias_inactivo !== null
+                      ? `<span class="dias-badge ${p.dias_inactivo>7?'dias-red':'dias-yellow'}">${p.dias_inactivo}d sin act.</span>`
+                      : '—'}
+                </td>
+                <td class="comment-cell" style="max-width:220px">
+                  ${p.last_comment_text
+                    ? `<div class="lc-text" style="font-size:12px">${escHtml(p.last_comment_text)}</div>
+                       <div class="lc-meta">${escHtml(p.last_comment_by||'')}${p.last_comment_at ? ' · '+new Date(p.last_comment_at).toLocaleDateString('es-AR') : ''}</div>`
+                    : '<span style="color:var(--text2);font-size:12px">—</span>'}
+                </td>
+                <td style="font-size:12px">${p.tecnicos ? p.tecnicos.split(',').map(t=>`<span class="tec-chip">${escHtml(t.trim())}</span>`).join(' ') : '—'}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : `<div class="dash-section"><div class="dash-section-title">🟢 Sin proyectos en riesgo</div></div>`}
+
+    <!-- Próximos vencimientos -->
+    ${d.proximos.length ? `
+    <div class="dash-section">
+      <div class="dash-section-title">📅 Próximos vencimientos</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>Proyecto</th><th>Fase</th><th>Vence</th><th>Días</th><th>Técnico(s)</th></tr>
+          </thead>
+          <tbody>
+            ${d.proximos.map(p => {
+              const dv = p.dias_hasta;
+              const dvTxt = dv < 0 ? `<span class="dias-badge dias-red">Vencido ${Math.abs(dv)}d</span>`
+                : dv === 0 ? `<span class="dias-badge dias-red">Hoy</span>`
+                : dv <= 5  ? `<span class="dias-badge dias-yellow">${dv}d</span>`
+                : `<span class="dias-badge">${dv}d</span>`;
+              return `
+              <tr>
+                <td><a href="#" class="dash-proj-link" data-id="${p.id}" style="font-weight:600;color:var(--accent)">${escHtml(p.nombre)}</a></td>
+                <td style="font-size:12px;color:var(--text2)">${escHtml(p.clickup_status||'—')}</td>
+                <td style="font-size:12px">${p.fecha_fin_est}</td>
+                <td style="text-align:center">${dvTxt}</td>
+                <td style="font-size:12px">${p.tecnicos ? p.tecnicos.split(',').map(t=>`<span class="tec-chip">${escHtml(t.trim())}</span>`).join(' ') : '—'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ''}
+
+    <!-- Horas por técnico (solo si hay datos) -->
+    ${d.tieneHoras && d.horasPorTecnico.length ? `
+    <div class="dash-section">
+      <div class="dash-section-title">⏱ Horas por técnico</div>
+      <div class="dash-chart-card" style="max-width:420px">
+        ${bar(d.horasPorTecnico.map(t => ({ label: t.nombre, count: Math.round(t.seg/3600*10)/10 })), 'label', 'count', 'var(--accent)')}
+        <div style="font-size:11px;color:var(--text2);margin-top:8px">Valores en horas · Solo registros finalizados</div>
+      </div>
+    </div>` : ''}
+  `;
+
+  // Links a detalle de proyecto
+  main.querySelectorAll('.dash-proj-link').forEach(a =>
+    a.addEventListener('click', e => { e.preventDefault(); navigate('project-detail', { id: a.dataset.id }); }));
 }
 
 // ── Boot ──────────────────────────────────────────────────

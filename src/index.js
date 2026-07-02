@@ -19,6 +19,7 @@ app.use('/api/sync', require('./routes/sync'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/alerts', require('./routes/alerts'));
 app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api/semana',    require('./routes/semana'));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 

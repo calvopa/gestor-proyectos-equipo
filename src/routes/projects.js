@@ -2,22 +2,40 @@ const express = require('express');
 const router = express.Router();
 const { getDb } = require('../db');
 
+// GET /api/projects/phases — valores distintos de clickup_status en la DB
+router.get('/phases', (req, res) => {
+  const db = getDb();
+  const rows = db.prepare(
+    "SELECT DISTINCT clickup_status FROM projects WHERE clickup_status IS NOT NULL AND clickup_status != '' ORDER BY clickup_status"
+  ).all();
+  res.json(rows.map(r => r.clickup_status));
+});
+
 router.get('/', (req, res) => {
   const db = getDb();
-  const { estado, prioridad, search, sort = 'updated_at', dir = 'desc' } = req.query;
+  const { estado, prioridad, search, fase, tecnico, sort = 'updated_at', dir = 'desc' } = req.query;
 
   const allowed_sort = ['nombre','estado','prioridad','fecha_inicio','fecha_fin_est','created_at','updated_at'];
-  const col = allowed_sort.includes(sort) ? sort : 'updated_at';
+  const col = allowed_sort.includes(sort) ? `p.${sort}` : 'p.updated_at';
   const order = dir === 'asc' ? 'ASC' : 'DESC';
 
-  let sql = 'SELECT * FROM projects WHERE 1=1';
+  let sql = `
+    SELECT p.*,
+      GROUP_CONCAT(DISTINCT r.nombre) as tecnicos
+    FROM projects p
+    LEFT JOIN assignments a ON a.project_id = p.id
+    LEFT JOIN resources r ON r.id = a.resource_id
+    WHERE 1=1
+  `;
   const params = [];
 
-  if (estado) { sql += ' AND estado=?'; params.push(estado); }
-  if (prioridad) { sql += ' AND prioridad=?'; params.push(prioridad); }
-  if (search) { sql += ' AND (nombre LIKE ? OR descripcion LIKE ? OR last_comment_text LIKE ?)'; params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
+  if (estado)   { sql += ' AND p.estado=?';    params.push(estado); }
+  if (prioridad){ sql += ' AND p.prioridad=?'; params.push(prioridad); }
+  if (fase)     { sql += ' AND p.clickup_status=?'; params.push(fase); }
+  if (tecnico)  { sql += ' AND EXISTS (SELECT 1 FROM assignments a2 WHERE a2.project_id=p.id AND a2.resource_id=?)'; params.push(tecnico); }
+  if (search)   { sql += ' AND (p.nombre LIKE ? OR p.descripcion LIKE ? OR p.last_comment_text LIKE ?)'; params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
 
-  sql += ` ORDER BY ${col} ${order}`;
+  sql += ` GROUP BY p.id ORDER BY ${col} ${order}`;
   res.json(db.prepare(sql).all(...params));
 });
 

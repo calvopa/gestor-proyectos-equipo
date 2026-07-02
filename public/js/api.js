@@ -12,6 +12,7 @@ const api = {
 
   // Projects
   getProjects: (q = {}) => api._fetch('/api/projects?' + new URLSearchParams(q)),
+  getPhases: () => api._fetch('/api/projects/phases'),
   getProject: (id) => api._fetch(`/api/projects/${id}`),
   createProject: (body) => api._fetch('/api/projects', { method: 'POST', body }),
   updateProject: (id, body) => api._fetch(`/api/projects/${id}`, { method: 'PUT', body }),
@@ -52,4 +53,13 @@ const api = {
   // Settings
   getSettings: () => api._fetch('/api/settings'),
   saveSettings: (body) => api._fetch('/api/settings', { method: 'PUT', body }),
+
+  // Dashboard
+  getDashboard: () => api._fetch('/api/dashboard'),
+
+  // Semana
+  getSemana: (from, to, refresh = false) =>
+    api._fetch(`/api/semana?from=${from}&to=${to}${refresh ? '&refresh=1' : ''}`),
+  getSemanaAiSummary: (projectId, weekStart) =>
+    api._fetch('/api/semana/ai-summary', { method: 'POST', body: { project_id: projectId, week_start: weekStart } }),
 };

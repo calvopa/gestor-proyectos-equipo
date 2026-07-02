@@ -64,10 +64,11 @@ async function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function fetchLastComment(taskId, token) {
   try {
-    const data = await apiFetch(`/task/${taskId}/comment`, token);
+    // reverse=true → ClickUp devuelve el comentario más reciente primero
+    const data = await apiFetch(`/task/${taskId}/comment?reverse=true`, token);
     const comments = data.comments || [];
     if (!comments.length) return null;
-    const last = comments[comments.length - 1];
+    const last = comments[0];
     return {
       text: last.comment_text || '',
       by:   last.user?.username || last.user?.email || '',
@@ -119,7 +120,7 @@ async function syncProjects(token) {
       updated_at        = datetime('now')
   `);
 
-  let inserted = 0, updated = 0;
+  let inserted = 0, updated = 0, commentsUpdated = 0;
 
   for (const listId of listIds) {
     console.log(`[clickup] fetching tasks from list ${listId}...`);
@@ -142,14 +143,14 @@ async function syncProjects(token) {
       // Descripción desde el texto de la tarea
       const descripcion = t.description || t.text_content || null;
 
-      // Último comentario
+      // Último comentario (reverse=true garantiza el más reciente primero)
       let comment = null;
       try {
         comment = await fetchLastComment(t.id, token);
         await sleep(80); // respetar rate limit
       } catch {}
 
-      const existing = db.prepare('SELECT id FROM projects WHERE clickup_id=?').get(t.id);
+      const existing = db.prepare('SELECT id, last_comment_at FROM projects WHERE clickup_id=?').get(t.id);
 
       const row = {
         nombre:            t.name,
@@ -165,12 +166,13 @@ async function syncProjects(token) {
 
       upsert.run(row);
 
-      // Actualizar fechas solo en upsert (no pisamos las locales si ya existen)
-      if (!existing && (fecha_inicio || fecha_fin_est)) {
+      // Siempre sincronizar fechas desde ClickUp (si ClickUp las tiene)
+      if (fecha_inicio !== null || fecha_fin_est !== null) {
         db.prepare('UPDATE projects SET fecha_inicio=?, fecha_fin_est=? WHERE clickup_id=?')
           .run(fecha_inicio, fecha_fin_est, t.id);
       }
 
+      if (comment?.at && comment.at !== existing?.last_comment_at) commentsUpdated++;
       if (existing) updated++; else inserted++;
     }
 
@@ -189,7 +191,8 @@ async function syncProjects(token) {
     }
   }
 
-  return { inserted, updated, total: inserted + updated };
+  console.log(`[clickup] comentarios actualizados: ${commentsUpdated}/${inserted + updated}`);
+  return { inserted, updated, commentsUpdated, total: inserted + updated };
 }
 
 async function syncMembers(token, teamId) {
@@ -235,7 +238,7 @@ async function runSync() {
     const db = getDb_();
     db.prepare("INSERT OR REPLACE INTO settings (clave,valor) VALUES ('last_sync',?)").run(new Date().toISOString());
 
-    console.log('[clickup] sync complete');
+    console.log(`[clickup] sync complete — proyectos: +${projectsResult.inserted} creados / ${projectsResult.updated} actualizados / ${projectsResult.commentsUpdated} comentarios nuevos | recursos: +${membersResult.inserted} / ${membersResult.updated}`);
     return {
       ok: true,
       projects: projectsResult,
@@ -248,4 +251,45 @@ async function runSync() {
   }
 }
 
-module.exports = { runSync, getToken };
+async function fetchWeekActivity(db, fromStr, toStr, token) {
+  const fromMs = new Date(fromStr + 'T00:00:00Z').getTime();
+  const toMs   = new Date(toStr   + 'T23:59:59Z').getTime();
+
+  const projects = db.prepare(
+    'SELECT id, clickup_id FROM projects WHERE clickup_id IS NOT NULL'
+  ).all();
+
+  db.prepare('DELETE FROM weekly_activity WHERE week_start=?').run(fromStr);
+
+  const insert = db.prepare(`
+    INSERT INTO weekly_activity (project_id, week_start, event_type, event_at, actor, detail)
+    VALUES (@project_id, @week_start, @event_type, @event_at, @actor, @detail)
+  `);
+
+  for (const p of projects) {
+    try {
+      const data = await apiFetch(`/task/${p.clickup_id}/comment`, token);
+      const comments = data.comments || [];
+      for (const c of comments) {
+        const ts = parseInt(c.date, 10);
+        if (isNaN(ts) || ts < fromMs || ts > toMs) continue;
+        const text = (c.comment_text || '').trim();
+        if (!text) continue;
+        insert.run({
+          project_id: p.id,
+          week_start: fromStr,
+          event_type: 'comment',
+          event_at:   new Date(ts).toISOString().replace('T', ' ').replace(/\.\d+Z$/, ''),
+          actor:      c.user?.username || c.user?.email || 'Desconocido',
+          detail:     text.length > 400 ? text.slice(0, 397) + '...' : text,
+        });
+      }
+      await sleep(120);
+    } catch (err) {
+      console.error(`[semana] comments for ${p.clickup_id}:`, err.message);
+    }
+  }
+  console.log(`[semana] fetchWeekActivity done for ${fromStr}`);
+}
+
+module.exports = { runSync, getToken, fetchWeekActivity };
