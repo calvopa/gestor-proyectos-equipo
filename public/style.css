@@ -618,6 +618,125 @@ tr.fila-yellow:hover td { background: rgba(234,179,8,.09); }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Dashboard ── */
+.clickable { cursor: pointer; }
+
+.dash-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+@media (max-width: 900px) { .dash-stats { grid-template-columns: repeat(2, 1fr); } }
+
+.dash-stat .value { font-size: 26px; }
+.dash-stat.clickable { transition: border-color .15s, background .15s; }
+.dash-stat.clickable:hover { border-color: var(--accent); background: var(--bg2); }
+.dash-sub { font-size: 11px; color: var(--text2); margin-top: 4px; }
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 900px) { .dash-grid { grid-template-columns: 1fr; } }
+
+.dash-card-title {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+.dash-link { font-size: 12px; font-weight: 500; }
+
+.dash-empty {
+  color: var(--text2);
+  font-size: 13px;
+  padding: 14px 0;
+  text-align: center;
+}
+
+/* Salud bar */
+.salud-bar {
+  display: flex;
+  height: 12px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: var(--bg3);
+  margin-bottom: 12px;
+}
+.salud-seg { height: 100%; }
+.salud-seg.seg-red    { background: var(--red); }
+.salud-seg.seg-yellow { background: var(--yellow); }
+.salud-seg.seg-green  { background: var(--green); }
+.salud-seg.seg-grey   { background: var(--border); }
+.salud-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--text2);
+}
+.salud-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.salud-legend .clickable:hover { color: var(--text); }
+
+/* Estado chips */
+.estado-chips { display: flex; gap: 10px; flex-wrap: wrap; }
+.estado-chip {
+  flex: 1;
+  min-width: 90px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  text-align: center;
+  transition: border-color .15s;
+}
+.estado-chip.clickable:hover { border-color: var(--accent); }
+.estado-chip-n { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+
+/* Dashboard alert rows */
+.dash-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.dash-alert:last-child { border-bottom: none; }
+.dash-alert:hover .dash-alert-name { color: var(--accent); }
+.dash-alert-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash-alert-msg  { font-size: 12px; color: var(--text2); margin-top: 2px; }
+
+/* Top week */
+.topweek-row { padding: 8px 0; }
+.topweek-row:hover .topweek-name { color: var(--accent); }
+.topweek-info { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 5px; }
+.topweek-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 10px; }
+.topweek-hrs  { color: var(--text2); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.topweek-bar  { height: 6px; background: var(--bg3); border-radius: 99px; overflow: hidden; }
+.topweek-fill { height: 100%; background: var(--accent); border-radius: 99px; }
+
+/* Recientes */
+.dash-reciente { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.dash-reciente:last-child { border-bottom: none; }
+.dash-reciente:hover .dash-reciente-name { color: var(--accent); }
+.dash-reciente-name { font-size: 13px; font-weight: 600; }
+.dash-reciente-text { font-size: 12px; color: var(--text); margin-top: 3px; line-height: 1.4; }
+.dash-reciente-meta { font-size: 11px; color: var(--text2); margin-top: 3px; }
+
+/* Kanban salud tag */
+.kanban-salud {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 7px;
+  border-radius: 99px;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+}
+.kanban-salud-red    { background: rgba(239,68,68,.15); color: #f87171; border: 1px solid rgba(239,68,68,.4); }
+.kanban-salud-yellow { background: rgba(234,179,8,.15); color: #fbbf24; border: 1px solid rgba(234,179,8,.4); }
+
 /* ── Scrollbar ── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: var(--bg2); }

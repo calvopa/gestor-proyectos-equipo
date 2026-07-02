@@ -42,6 +42,9 @@ const api = {
   // Alerts
   getAlerts: () => api._fetch('/api/alerts'),
 
+  // Dashboard
+  getDashboard: () => api._fetch('/api/dashboard'),
+
   // Sync
   syncClickUp: () => api._fetch('/api/sync/clickup', { method: 'POST' }),
   getSyncStatus: () => api._fetch('/api/sync/status'),

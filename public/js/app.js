@@ -98,6 +98,7 @@ function diasHtml(p) {
 
 // ── Router ─────────────────────────────────────────────────
 const routes = {
+  'dashboard':      renderDashboard,
   'projects':       renderProjects,
   'kanban':         renderKanban,
   'alerts':         renderAlerts,
@@ -151,8 +152,163 @@ async function updateAlertBadge() {
   } catch {}
 }
 
+// ── ⓪ Dashboard / Inicio ──────────────────────────────────
+async function renderDashboard() {
+  const main = document.getElementById('main-content');
+  const [dash, projects, alerts] = await Promise.all([
+    api.getDashboard(),
+    api.getProjects(),
+    api.getAlerts(),
+  ]);
+
+  // Salud global sobre proyectos no cerrados
+  const abiertos = projects.filter(p => p.estado !== 'cerrado');
+  const salud = { red: 0, yellow: 0, green: 0, grey: 0 };
+  abiertos.forEach(p => { salud[calcSalud(p).level]++; });
+  const saludTotal = abiertos.length || 1;
+  const pct = n => Math.round((n / saludTotal) * 100);
+
+  const pe = dash.proyectos;
+  const estadoDefs = [
+    ['en_curso', 'En curso', pe.en_curso],
+    ['backlog',  'Backlog',  pe.backlog],
+    ['pausado',  'Pausado',  pe.pausado],
+    ['cerrado',  'Cerrado',  pe.cerrado],
+  ];
+
+  const criticas = alerts.alerts.filter(a => a.nivel === 'critica').slice(0, 5);
+  const maxWeek  = Math.max(1, ...dash.topWeek.map(t => t.seg));
+
+  main.innerHTML = `
+    <div class="page-header">
+      <h1>Inicio</h1>
+      <button class="btn btn-secondary btn-sm" id="btn-dash-refresh">↻ Actualizar</button>
+    </div>
+
+    <div class="dash-stats">
+      <div class="stat-card dash-stat clickable" data-goto="projects" data-estado="en_curso">
+        <div class="label">Proyectos activos</div>
+        <div class="value">${pe.en_curso}</div>
+        <div class="dash-sub">${pe.total} en total</div>
+      </div>
+      <div class="stat-card dash-stat">
+        <div class="label">Horas · últimos 7 días</div>
+        <div class="value">${fmtSec(dash.horas.d7_seg)}</div>
+        <div class="dash-sub">contabilizadas</div>
+      </div>
+      <div class="stat-card dash-stat">
+        <div class="label">Horas · últimos 30 días</div>
+        <div class="value">${fmtSec(dash.horas.d30_seg)}</div>
+        <div class="dash-sub">contabilizadas</div>
+      </div>
+      <div class="stat-card dash-stat">
+        <div class="label">Horas totales</div>
+        <div class="value">${fmtSec(dash.horas.total_seg)}</div>
+        <div class="dash-sub">histórico</div>
+      </div>
+    </div>
+
+    <div class="dash-grid">
+      <div class="card">
+        <div class="dash-card-title">Salud de proyectos <span style="color:var(--text2);font-weight:400">· ${abiertos.length} abiertos</span></div>
+        <div class="salud-bar">
+          ${salud.red    ? `<div class="salud-seg seg-red"    style="width:${pct(salud.red)}%"    title="${salud.red} en riesgo"></div>` : ''}
+          ${salud.yellow ? `<div class="salud-seg seg-yellow" style="width:${pct(salud.yellow)}%" title="${salud.yellow} con atención"></div>` : ''}
+          ${salud.green  ? `<div class="salud-seg seg-green"  style="width:${pct(salud.green)}%"  title="${salud.green} al día"></div>` : ''}
+          ${salud.grey   ? `<div class="salud-seg seg-grey"   style="width:${pct(salud.grey)}%"   title="${salud.grey} sin iniciar/pausa"></div>` : ''}
+        </div>
+        <div class="salud-legend">
+          <span class="clickable" data-goto="projects" data-riesgo="1"><span class="semaforo semaforo-red"></span> ${salud.red} en riesgo</span>
+          <span class="clickable" data-goto="projects" data-riesgo="1"><span class="semaforo semaforo-yellow"></span> ${salud.yellow} atención</span>
+          <span><span class="semaforo semaforo-green"></span> ${salud.green} al día</span>
+          <span><span class="semaforo semaforo-grey"></span> ${salud.grey} en pausa/backlog</span>
+        </div>
+
+        <div class="dash-card-title" style="margin-top:22px">Proyectos por estado</div>
+        <div class="estado-chips">
+          ${estadoDefs.map(([e, lbl, n]) => `
+            <div class="estado-chip clickable" data-goto="projects" data-estado="${e}">
+              <div class="estado-chip-n">${n}</div>
+              ${badgeEstado(e)}
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="dash-card-title">
+          Alertas críticas
+          ${alerts.criticas ? `<span class="alerta-pill alerta-red" style="margin-left:6px">${alerts.criticas}</span>` : ''}
+          <a href="#" class="dash-link" data-goto="alerts" style="float:right">ver todas ›</a>
+        </div>
+        ${criticas.length === 0
+          ? `<div class="dash-empty">✅ Sin alertas críticas</div>`
+          : criticas.map(a => `
+            <div class="dash-alert clickable" data-goto="project-detail" data-id="${a.proyecto_id || ''}">
+              <span class="alert-dot critica"></span>
+              <div style="flex:1;min-width:0">
+                <div class="dash-alert-name">${escHtml(a.proyecto_nombre || a.recurso_nombre || '')}</div>
+                <div class="dash-alert-msg">${escHtml(a.mensaje)}</div>
+              </div>
+            </div>
+          `).join('')}
+      </div>
+    </div>
+
+    <div class="dash-grid" style="margin-top:16px">
+      <div class="card">
+        <div class="dash-card-title">Top proyectos · horas últimos 7 días</div>
+        ${dash.topWeek.length === 0
+          ? `<div class="dash-empty">Sin horas registradas esta semana</div>`
+          : dash.topWeek.map(t => `
+            <div class="topweek-row clickable" data-goto="project-detail" data-id="${t.id}">
+              <div class="topweek-info">
+                <span class="topweek-name">${escHtml(t.nombre)}</span>
+                <span class="topweek-hrs">${fmtSec(t.seg)}</span>
+              </div>
+              <div class="topweek-bar"><div class="topweek-fill" style="width:${Math.round((t.seg / maxWeek) * 100)}%"></div></div>
+            </div>
+          `).join('')}
+      </div>
+
+      <div class="card">
+        <div class="dash-card-title">Actividad reciente <span style="color:var(--text2);font-weight:400">· ClickUp</span></div>
+        ${dash.recientes.length === 0
+          ? `<div class="dash-empty">Sin comentarios recientes</div>`
+          : dash.recientes.map(r => `
+            <div class="dash-reciente clickable" data-goto="project-detail" data-id="${r.id}">
+              <div class="dash-reciente-name">${escHtml(r.nombre)}</div>
+              <div class="dash-reciente-text">${escHtml((r.last_comment_text || '').slice(0, 100))}${(r.last_comment_text || '').length > 100 ? '…' : ''}</div>
+              <div class="dash-reciente-meta">${escHtml(r.last_comment_by || '')}${r.last_comment_at ? ' · ' + new Date(r.last_comment_at).toLocaleDateString('es-AR') : ''}</div>
+            </div>
+          `).join('')}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('btn-dash-refresh').addEventListener('click', () => navigate('dashboard'));
+
+  // Navegación desde elementos clickeables
+  main.querySelectorAll('[data-goto]').forEach(elm => {
+    elm.addEventListener('click', e => {
+      e.preventDefault();
+      const goto = elm.dataset.goto;
+      if (goto === 'project-detail') {
+        if (elm.dataset.id) navigate('project-detail', { id: elm.dataset.id });
+      } else if (goto === 'projects') {
+        const params = {};
+        if (elm.dataset.estado) params.estado = elm.dataset.estado;
+        if (elm.dataset.riesgo) params.soloRiesgo = true;
+        navigate('projects', params);
+      } else {
+        navigate(goto);
+      }
+    });
+  });
+}
+
 // ── ① Projects table ──────────────────────────────────────
-async function renderProjects({ search = '', estado = '', prioridad = '', sort = 'updated_at', dir = 'desc', soloRiesgo = false } = {}) {
+async function renderProjects({ search = '', estado = '', prioridad = '', sort = 'updated_at', dir = 'desc', soloRiesgo = false, focusSearch = false } = {}) {
   const main = document.getElementById('main-content');
   let projects = await api.getProjects({ search, estado, prioridad, sort, dir });
 
@@ -287,9 +443,16 @@ async function renderProjects({ search = '', estado = '', prioridad = '', sort =
       search: e.target.value,
       estado: document.getElementById('f-estado').value,
       prioridad: document.getElementById('f-prioridad').value,
-      sort, dir, soloRiesgo
+      sort, dir, soloRiesgo, focusSearch: true
     }), 300);
   });
+
+  // Restaurar foco tras re-render por búsqueda (el input se recrea con innerHTML)
+  if (focusSearch) {
+    const inp = document.getElementById('f-search');
+    inp.focus();
+    inp.setSelectionRange(inp.value.length, inp.value.length);
+  }
   document.getElementById('f-estado').addEventListener('change', e =>
     renderProjects({ search: document.getElementById('f-search').value, estado: e.target.value, prioridad: document.getElementById('f-prioridad').value, sort, dir, soloRiesgo }));
   document.getElementById('f-prioridad').addEventListener('change', e =>
@@ -414,15 +577,20 @@ async function renderKanban() {
             <span>${byCol[col].length}</span>
           </div>
           <div class="kanban-cards" data-estado="${col}">
-            ${byCol[col].map(p => `
+            ${byCol[col].map(p => {
+              const salud = calcSalud(p);
+              const alerta = (salud.level === 'red' || salud.level === 'yellow')
+                ? `<span class="kanban-salud kanban-salud-${salud.level}">${escHtml(salud.titulo)}</span>` : '';
+              return `
               <div class="kanban-card" draggable="true" data-id="${p.id}" data-estado="${p.estado}">
-                <div class="kanban-card-title">${escHtml(p.nombre)}</div>
+                <div class="kanban-card-title"><span class="semaforo semaforo-${salud.level}" style="margin-right:7px" title="${escHtml(salud.detalle)}"></span>${escHtml(p.nombre)}</div>
                 <div class="kanban-card-meta">
                   ${badgePrio(p.prioridad)}
+                  ${alerta}
                   ${!p.cuenta_horas ? '<span class="no-cuenta-badge">sin cómputo</span>' : ''}
                 </div>
               </div>
-            `).join('')}
+            `; }).join('')}
           </div>
         </div>
       `).join('')}
@@ -1066,7 +1234,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateAlertBadge();
   });
 
-  navigate('projects');
+  navigate('dashboard');
   updateSyncStatus();
   updateAlertBadge();
   setInterval(updateSyncStatus, 60000);
