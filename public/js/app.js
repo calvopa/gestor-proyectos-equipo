@@ -1110,6 +1110,19 @@ async function renderSettings() {
           <button class="btn btn-secondary" id="btn-sync-now" ${!syncStatus.configured?'disabled title="Configurá el token primero"':''}>🔄 Sync ahora</button>
         </div>
       </div>
+
+      <div class="card">
+        <h2>Exportación a Google Sheets</h2>
+        <div style="margin-bottom:14px;padding:10px 14px;background:var(--bg3);border-radius:var(--radius);font-size:13px">
+          Estado: <strong>${settings.sheets_webhook_url ? '✅ Configurado' : '⚠️ Sin configurar'}</strong>
+        </div>
+        <div class="form-group">
+          <label>Sheets webhook URL</label>
+          <input type="text" id="s-sheets-url" value="${escHtml(settings.sheets_webhook_url||'')}" placeholder="https://script.google.com/macros/s/xxx/exec">
+          <div style="font-size:12px;color:var(--text2);margin-top:4px">URL del Apps Script desplegado como Web App en el Sheet de trazabilidad.</div>
+        </div>
+        <button class="btn btn-primary" id="btn-save-sheets">Guardar URL</button>
+      </div>
     </div>
   `;
 
@@ -1123,6 +1136,15 @@ async function renderSettings() {
     try {
       await api.saveSettings(body);
       toast('Configuración guardada', 'success');
+      renderSettings();
+    } catch (e) { toast(e.message, 'error'); }
+  });
+
+  document.getElementById('btn-save-sheets')?.addEventListener('click', async () => {
+    const url = document.getElementById('s-sheets-url').value.trim();
+    try {
+      await api.saveSettings({ sheets_webhook_url: url || null });
+      toast('URL guardada', 'success');
       renderSettings();
     } catch (e) { toast(e.message, 'error'); }
   });

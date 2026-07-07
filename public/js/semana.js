@@ -168,6 +168,7 @@ function semanaRenderFull() {
           <span>✨ Resumen IA</span>
         </label>
         ${groupBy === 'fase' ? `<button class="btn btn-secondary btn-sm" id="sem-export-pdf">⬇ Exportar PDF</button>` : ''}
+        <button class="btn btn-secondary btn-sm" id="sem-export-sheets">📊 Exportar a Sheets</button>
         <button class="btn btn-primary btn-sm" id="sem-present">▶ Presentar</button>
       </div>
     </div>
@@ -224,6 +225,7 @@ function semanaRenderFull() {
     semanaRenderFull();
   });
   document.getElementById('sem-export-pdf')?.addEventListener('click', semanaExportPDF);
+  document.getElementById('sem-export-sheets')?.addEventListener('click', semanaExportSheets);
   document.getElementById('sem-present').addEventListener('click', semanaEnterPresentation);
 
   main.querySelectorAll('.sem-ai-btn').forEach(btn => {
@@ -521,6 +523,35 @@ function semanaPresentCardHtml(p, weekStart) {
       </div>
       ${aiTxt}
     </div>`;
+}
+
+// ── Sheets Export ─────────────────────────────────────────
+async function semanaExportSheets() {
+  const { data } = semanaState;
+  if (!data) return;
+
+  const btn = document.getElementById('sem-export-sheets');
+  btn.disabled = true;
+  btn.textContent = '⏳ Exportando...';
+
+  try {
+    const result = await api._fetch('/api/export/sheets', {
+      method: 'POST',
+      body: data,
+    });
+    if (result.ok) {
+      toast(`✅ Exportado a Sheets · Solapa "${result.tab}" · ${result.rows} filas`, 'success', 5000);
+    } else {
+      toast(`Error: ${result.error}`, 'error', 5000);
+    }
+  } catch (e) {
+    toast(e.message === 'sheets_webhook_url no configurada en Ajustes'
+      ? '⚙️ Configurá la Sheets webhook URL en Ajustes primero'
+      : e.message, 'error', 6000);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📊 Exportar a Sheets';
+  }
 }
 
 // ── PDF Export ────────────────────────────────────────────

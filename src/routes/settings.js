@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getDb } = require('../db');
 
-const PUBLIC_KEYS = ['clickup_token', 'clickup_team_id', 'clickup_mapping_level', 'last_sync'];
+const PUBLIC_KEYS = ['clickup_token', 'clickup_team_id', 'clickup_mapping_level', 'last_sync', 'sheets_webhook_url'];
 
 router.get('/', (req, res) => {
   const db = getDb();
@@ -20,7 +20,7 @@ router.get('/', (req, res) => {
 
 router.put('/', (req, res) => {
   const db = getDb();
-  const allowed = ['clickup_token', 'clickup_team_id', 'clickup_mapping_level'];
+  const allowed = ['clickup_token', 'clickup_team_id', 'clickup_mapping_level', 'sheets_webhook_url'];
   const upsert = db.prepare('INSERT OR REPLACE INTO settings (clave, valor) VALUES (?, ?)');
 
   db.transaction(() => {

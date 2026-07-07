@@ -20,6 +20,7 @@ app.use('/api/settings', require('./routes/settings'));
 app.use('/api/alerts', require('./routes/alerts'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/semana',    require('./routes/semana'));
+app.use('/api/export',   require('./routes/export'));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 
