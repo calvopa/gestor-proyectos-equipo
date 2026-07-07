@@ -167,6 +167,7 @@ function semanaRenderFull() {
           <input type="checkbox" id="sem-ai-flag" ${aiEnabled ? 'checked' : ''}>
           <span>✨ Resumen IA</span>
         </label>
+        ${groupBy === 'fase' ? `<button class="btn btn-secondary btn-sm" id="sem-export-pdf">⬇ Exportar PDF</button>` : ''}
         <button class="btn btn-primary btn-sm" id="sem-present">▶ Presentar</button>
       </div>
     </div>
@@ -222,6 +223,7 @@ function semanaRenderFull() {
     semanaState.aiEnabled = e.target.checked;
     semanaRenderFull();
   });
+  document.getElementById('sem-export-pdf')?.addEventListener('click', semanaExportPDF);
   document.getElementById('sem-present').addEventListener('click', semanaEnterPresentation);
 
   main.querySelectorAll('.sem-ai-btn').forEach(btn => {
@@ -519,6 +521,180 @@ function semanaPresentCardHtml(p, weekStart) {
       </div>
       ${aiTxt}
     </div>`;
+}
+
+// ── PDF Export ────────────────────────────────────────────
+function semanaExportPDF() {
+  const { data } = semanaState;
+  if (!data) return;
+
+  const from    = data.week_start;
+  const range   = swFmtRange(from);
+  const withActivity = data.projects.filter(p => p.has_activity);
+  const grouped = semanaGroup(withActivity, 'fase');
+
+  const PRIO_COLOR = { critica: '#c53030', alta: '#c05621', media: '#2b6cb0', baja: '#276749' };
+  const PRIO_BG    = { critica: '#fff5f5', alta: '#fffaf0', media: '#ebf8ff', baja: '#f0fff4' };
+  const EV_ICON_PDF = { comment: '💬', status: '🔄', date: '📅', assignee: '·', other: '·' };
+
+  function fmtSeg(seg) {
+    if (!seg) return '';
+    const h = Math.floor(seg / 3600);
+    const m = Math.floor((seg % 3600) / 60);
+    return h ? `${h}h ${m}m` : `${m}m`;
+  }
+
+  function prioBadge(p) {
+    const label = { critica: 'CRÍTICA', alta: 'ALTA', media: 'MEDIA', baja: 'BAJA' }[p] || p;
+    const color = PRIO_COLOR[p] || '#2b6cb0';
+    const bg    = PRIO_BG[p]    || '#ebf8ff';
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;letter-spacing:.6px;color:${color};background:${bg};border:1px solid ${color}33">${label}</span>`;
+  }
+
+  function saludLabel(s) {
+    return { green: '🟢 Al día', yellow: '🟡 Con atención', red: '🔴 En riesgo', grey: '⚫ Sin datos', cerrado: '⚫ Cerrado', backlog: '⚫ Backlog' }[s] || s;
+  }
+
+  // Métricas
+  const { summary } = data;
+
+  // Secciones por fase (anonimizadas: sin nombres de técnicos)
+  const seccionesHTML = grouped.map(group => {
+    const cards = group.items.map(p => {
+      const events = p.events.map(e => {
+        const icon   = EV_ICON_PDF[e.event_type] || '·';
+        const dayStr = swFmtDay(e.event_at);
+        // detail puede contener nombre de técnico en cambios de assignee → se omite si tipo es assignee
+        const detail = e.event_type === 'assignee' ? '(cambio de asignación)' : (e.detail || '');
+        return `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #edf2f7;font-size:11px;line-height:1.4">
+          <span style="color:#718096;white-space:nowrap;min-width:72px">${dayStr}</span>
+          <span style="font-size:12px">${icon}</span>
+          <span style="color:#2d3748">${detail.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
+        </div>`;
+      }).join('');
+
+      let faseChangeTxt = '';
+      if (p.fase_changed) {
+        faseChangeTxt = `<div style="margin-bottom:6px;font-size:11px;color:#744210;background:#fefcbf;border-radius:4px;padding:3px 8px;display:inline-block">
+          🔄 Cambio de fase: ${(p.fase_prev||'').replace(/</g,'&lt;')} → ${(p.clickup_status||'').replace(/</g,'&lt;')}
+        </div>`;
+      }
+
+      let venceTxt = '';
+      if (p.fecha_fin_est) {
+        const dv = swDaysUntil(p.fecha_fin_est);
+        const alerta = dv < 0 ? `<span style="color:#c53030;font-weight:700">⚠️ Vencido hace ${Math.abs(dv)}d</span>`
+          : dv <= 5 ? `<span style="color:#c05621;font-weight:700">⚠️ Vence en ${dv}d</span>`
+          : `<span style="color:#276749">✅ Vence: ${p.fecha_fin_est}</span>`;
+        venceTxt = `<span style="font-size:11px">${alerta}</span>`;
+      }
+
+      const aiTxt = p.ai_summary
+        ? `<div style="margin-top:8px;padding:8px 10px;background:#ebf8ff;border-left:3px solid #2b6cb0;border-radius:4px;font-size:11px;color:#2c5282;line-height:1.5">✨ ${p.ai_summary.replace(/</g,'&lt;')}</div>`
+        : '';
+
+      return `
+        <div style="page-break-inside:avoid;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:12px;background:#fff">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+            <div style="font-size:13px;font-weight:700;color:#1a365d;line-height:1.3">${p.nombre.replace(/</g,'&lt;')}</div>
+            ${prioBadge(p.prioridad)}
+          </div>
+          <div style="font-size:11px;color:#718096;margin-bottom:8px">${(p.clickup_status||'—').replace(/</g,'&lt;')} · ${saludLabel(p.salud)}</div>
+          ${faseChangeTxt}
+          <div style="font-size:11px;font-weight:600;color:#4a5568;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">Esta semana · ${p.event_count} ${p.event_count === 1 ? 'update' : 'updates'}</div>
+          ${events}
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;flex-wrap:wrap;gap:6px">
+            <span style="font-size:11px;color:#718096">${p.dias_inactivo !== null ? `${p.dias_inactivo}d sin actividad` : ''}</span>
+            ${venceTxt}
+          </div>
+          ${aiTxt}
+        </div>`;
+    }).join('');
+
+    return `
+      <div style="page-break-inside:avoid;margin-bottom:24px">
+        <div style="border-left:4px solid #2c5282;padding-left:10px;margin-bottom:10px">
+          <div style="font-size:12px;font-weight:700;color:#2c5282;text-transform:uppercase;letter-spacing:.6px">${group.label.replace(/</g,'&lt;')}</div>
+          <div style="font-size:11px;color:#718096">${group.items.length} proyecto${group.items.length !== 1 ? 's' : ''} con actividad</div>
+        </div>
+        ${cards}
+      </div>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Avance Semanal — ${range}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #2d3748; background: #fff; }
+    @page { margin: 18mm 14mm; }
+    @media print {
+      body { font-size: 11px; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Botón imprimir (solo pantalla) -->
+  <div class="no-print" style="position:fixed;top:14px;right:14px;z-index:999">
+    <button onclick="window.print()" style="background:#1a365d;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;cursor:pointer;font-family:Arial,sans-serif">
+      🖨 Imprimir / Guardar PDF
+    </button>
+  </div>
+
+  <!-- Encabezado -->
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1a365d;padding-bottom:12px;margin-bottom:18px">
+    <div>
+      <div style="font-size:18px;font-weight:800;color:#1a365d;letter-spacing:-.3px">Avance Semanal de Proyectos</div>
+      <div style="font-size:12px;color:#718096;margin-top:3px">Reporte generado el ${new Date().toLocaleString('es-AR', { dateStyle:'long', timeStyle:'short' })}</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:14px;font-weight:700;color:#2c5282">${range}</div>
+      <div style="font-size:11px;color:#718096;margin-top:2px">Vista por fase</div>
+    </div>
+  </div>
+
+  <!-- Métricas -->
+  <div style="display:flex;gap:12px;margin-bottom:22px;flex-wrap:wrap">
+    <div style="flex:1;min-width:120px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;text-align:center">
+      <div style="font-size:22px;font-weight:800;color:#1a365d">${summary.with_activity}<span style="font-size:14px;color:#718096"> / ${summary.total}</span></div>
+      <div style="font-size:11px;color:#718096;margin-top:2px;text-transform:uppercase;letter-spacing:.4px">Con actividad</div>
+    </div>
+    <div style="flex:1;min-width:120px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;text-align:center">
+      <div style="font-size:22px;font-weight:800;color:#1a365d">${summary.total_events}</div>
+      <div style="font-size:11px;color:#718096;margin-top:2px;text-transform:uppercase;letter-spacing:.4px">Updates</div>
+    </div>
+    <div style="flex:1;min-width:120px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;text-align:center">
+      <div style="font-size:22px;font-weight:800;color:#1a365d">${summary.phase_changes}</div>
+      <div style="font-size:11px;color:#718096;margin-top:2px;text-transform:uppercase;letter-spacing:.4px">Cambios de fase</div>
+    </div>
+    ${summary.entered_risk > 0 ? `
+    <div style="flex:1;min-width:120px;background:#fff5f5;border:1px solid #fed7d7;border-radius:6px;padding:12px 16px;text-align:center">
+      <div style="font-size:22px;font-weight:800;color:#c53030">+${summary.entered_risk}</div>
+      <div style="font-size:11px;color:#c53030;margin-top:2px;text-transform:uppercase;letter-spacing:.4px">→ En riesgo</div>
+    </div>` : ''}
+    ${summary.left_risk > 0 ? `
+    <div style="flex:1;min-width:120px;background:#f0fff4;border:1px solid #c6f6d5;border-radius:6px;padding:12px 16px;text-align:center">
+      <div style="font-size:22px;font-weight:800;color:#276749">${summary.left_risk}</div>
+      <div style="font-size:11px;color:#276749;margin-top:2px;text-transform:uppercase;letter-spacing:.4px">Salieron de riesgo</div>
+    </div>` : ''}
+  </div>
+
+  <!-- Proyectos agrupados por fase -->
+  ${seccionesHTML || '<p style="color:#718096;text-align:center;padding:40px">Sin proyectos con actividad esta semana.</p>'}
+
+  <!-- Pie -->
+  <div style="margin-top:24px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:10px;color:#a0aec0;text-align:center">
+    Reporte anonimizado · Gestor de Proyectos GCS · ${new Date().getFullYear()}
+  </div>
+</body>
+</html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
 }
 
 // ── Register on DOMContentLoaded ──────────────────────────
