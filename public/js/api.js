@@ -37,6 +37,8 @@ const api = {
   startTimer: (body) => api._fetch('/api/time/start', { method: 'POST', body }),
   stopTimer: (body) => api._fetch('/api/time/stop', { method: 'POST', body }),
   addManual: (body) => api._fetch('/api/time/manual', { method: 'POST', body }),
+  estimateTime: (body) => api._fetch('/api/time/estimate', { method: 'POST', body }),
+  clearEstimates: (body) => api._fetch('/api/time/estimates', { method: 'DELETE', body }),
   deleteEntry: (id) => api._fetch(`/api/time/${id}`, { method: 'DELETE' }),
   getTotals: () => api._fetch('/api/time/totals'),
 

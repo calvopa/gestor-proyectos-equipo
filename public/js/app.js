@@ -672,8 +672,12 @@ async function renderProjectDetail({ id }) {
         <div class="value" id="stat-contadas">${fmtSec(p.hours?.seg_contados)}</div>
       </div>
       <div class="stat-card ${!p.cuenta_horas ? 'muted' : ''}">
-        <div class="label">Horas totales registradas</div>
+        <div class="label">Horas registradas</div>
         <div class="value" id="stat-total">${fmtSec(p.hours?.seg_total)}</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Horas estimadas <span style="font-size:10px;color:var(--text2)">(comentarios)</span></div>
+        <div class="value" id="stat-estimado" style="color:var(--accent)">${fmtSec(p.hours?.seg_estimado)}</div>
       </div>
       <div class="stat-card">
         <div class="label">Estado / Prioridad</div>
@@ -716,6 +720,8 @@ async function renderProjectDetail({ id }) {
           </div>
           <div style="flex:1"></div>
           <button class="btn btn-secondary btn-sm" id="btn-manual">+ Manual</button>
+          <button class="btn btn-secondary btn-sm" id="btn-estimate" title="Generar horas estimadas desde comentarios de ClickUp">⚡ Estimar</button>
+          <button class="btn btn-ghost btn-sm" id="btn-clear-estimates" title="Eliminar horas estimadas de este proyecto">✕ Estimados</button>
         </div>
 
         <!-- Entries -->
@@ -807,6 +813,7 @@ async function renderProjectDetail({ id }) {
         api.getProject(id).then(fresh => {
           document.getElementById('stat-contadas').textContent = fmtSec(fresh.hours?.seg_contados);
           document.getElementById('stat-total').textContent = fmtSec(fresh.hours?.seg_total);
+          if (document.getElementById('stat-estimado')) document.getElementById('stat-estimado').textContent = fmtSec(fresh.hours?.seg_estimado);
         });
       } else {
         activeEntry = await api.startTimer({ project_id: id });
@@ -823,8 +830,43 @@ async function renderProjectDetail({ id }) {
     api.getProject(id).then(fresh => {
       document.getElementById('stat-contadas').textContent = fmtSec(fresh.hours?.seg_contados);
       document.getElementById('stat-total').textContent = fmtSec(fresh.hours?.seg_total);
+      document.getElementById('stat-estimado').textContent = fmtSec(fresh.hours?.seg_estimado);
     });
   }));
+
+  // Estimar desde comentarios
+  document.getElementById('btn-estimate').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-estimate');
+    btn.disabled = true;
+    btn.textContent = '⏳ Estimando...';
+    try {
+      const r = await api.estimateTime({ project_id: id });
+      toast(`Estimados generados: +${r.created} registros`, 'success');
+      loadEntries(id);
+      api.getProject(id).then(fresh => {
+        document.getElementById('stat-contadas').textContent = fmtSec(fresh.hours?.seg_contados);
+        document.getElementById('stat-total').textContent = fmtSec(fresh.hours?.seg_total);
+        document.getElementById('stat-estimado').textContent = fmtSec(fresh.hours?.seg_estimado);
+      });
+    } catch (e) { toast(e.message, 'error'); }
+    btn.disabled = false;
+    btn.textContent = '⚡ Estimar';
+  });
+
+  // Limpiar estimados del proyecto
+  document.getElementById('btn-clear-estimates').addEventListener('click', async () => {
+    if (!confirm('¿Eliminar todas las horas estimadas de este proyecto?')) return;
+    try {
+      const r = await api.clearEstimates({ project_id: id });
+      toast(`${r.deleted} estimados eliminados`, 'success');
+      loadEntries(id);
+      api.getProject(id).then(fresh => {
+        document.getElementById('stat-contadas').textContent = fmtSec(fresh.hours?.seg_contados);
+        document.getElementById('stat-total').textContent = fmtSec(fresh.hours?.seg_total);
+        document.getElementById('stat-estimado').textContent = fmtSec(fresh.hours?.seg_estimado);
+      });
+    } catch (e) { toast(e.message, 'error'); }
+  });
 
   // Assign
   document.getElementById('btn-assign').addEventListener('click', () => showAssignModal(id, () => navigate('project-detail', { id })));
@@ -1111,6 +1153,20 @@ async function renderSettings() {
         </div>
       </div>
 
+      <div class="card" style="margin-bottom:20px">
+        <h2>Estimación de horas desde comentarios</h2>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:14px">
+          Al presionar "⚡ Estimar" en un proyecto, se generan registros de horas basados en los comentarios sincronizados desde ClickUp.
+          Si el comentario menciona una duración (ej. "2h", "30min", "1.5h"), se usa ese valor. Caso contrario, se aplica el fallback.
+        </p>
+        <div class="form-group">
+          <label>Minutos por comentario (fallback)</label>
+          <input type="number" id="s-min-comentario" value="${escHtml(settings.min_por_comentario||'15')}" min="1" max="480" style="width:100px">
+          <div style="font-size:12px;color:var(--text2);margin-top:4px">Tiempo estimado por cada comentario que no menciona duración explícita.</div>
+        </div>
+        <button class="btn btn-primary" id="btn-save-estimacion">Guardar</button>
+      </div>
+
       <div class="card">
         <h2>Exportación a Google Sheets</h2>
         <div style="margin-bottom:14px;padding:10px 14px;background:var(--bg3);border-radius:var(--radius);font-size:13px">
@@ -1137,6 +1193,15 @@ async function renderSettings() {
       await api.saveSettings(body);
       toast('Configuración guardada', 'success');
       renderSettings();
+    } catch (e) { toast(e.message, 'error'); }
+  });
+
+  document.getElementById('btn-save-estimacion')?.addEventListener('click', async () => {
+    const val = parseInt(document.getElementById('s-min-comentario').value, 10);
+    if (!val || val < 1) return toast('Valor inválido', 'error');
+    try {
+      await api.saveSettings({ min_por_comentario: String(val) });
+      toast('Configuración guardada', 'success');
     } catch (e) { toast(e.message, 'error'); }
   });
 

@@ -52,8 +52,9 @@ router.get('/:id', (req, res) => {
 
   const hours = db.prepare(`
     SELECT
-      SUM(CASE WHEN p.cuenta_horas=1 THEN COALESCE(te.duracion_seg,0) ELSE 0 END) as seg_contados,
-      SUM(COALESCE(te.duracion_seg,0)) as seg_total,
+      SUM(CASE WHEN p.cuenta_horas=1 AND te.tipo!='estimado' THEN COALESCE(te.duracion_seg,0) ELSE 0 END) as seg_contados,
+      SUM(CASE WHEN te.tipo!='estimado' THEN COALESCE(te.duracion_seg,0) ELSE 0 END) as seg_total,
+      SUM(CASE WHEN te.tipo='estimado' THEN COALESCE(te.duracion_seg,0) ELSE 0 END) as seg_estimado,
       COUNT(*) as entradas
     FROM time_entries te
     JOIN projects p ON p.id=te.project_id

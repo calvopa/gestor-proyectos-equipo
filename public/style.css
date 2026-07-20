@@ -473,8 +473,9 @@ textarea { resize: vertical; min-height: 80px; }
 .entry-item .entry-time { font-weight: 600; min-width: 70px; }
 .entry-item .entry-note { flex: 1; color: var(--text2); }
 .entry-item .entry-type { font-size: 11px; padding: 1px 6px; border-radius: 3px; }
-.entry-item .entry-type.timer  { background: #1e293b; color: #60a5fa; }
-.entry-item .entry-type.manual { background: #1a2e1a; color: #86efac; }
+.entry-item .entry-type.timer    { background: #1e293b; color: #60a5fa; }
+.entry-item .entry-type.manual   { background: #1a2e1a; color: #86efac; }
+.entry-item .entry-type.estimado { background: #2d1f4a; color: #c084fc; }
 
 /* ── Resource carga ── */
 .resource-card {

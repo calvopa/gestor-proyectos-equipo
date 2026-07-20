@@ -20,7 +20,7 @@ router.get('/', (req, res) => {
 
 router.put('/', (req, res) => {
   const db = getDb();
-  const allowed = ['clickup_token', 'clickup_team_id', 'clickup_mapping_level', 'sheets_webhook_url'];
+  const allowed = ['clickup_token', 'clickup_team_id', 'clickup_mapping_level', 'sheets_webhook_url', 'min_por_comentario'];
   const upsert = db.prepare('INSERT OR REPLACE INTO settings (clave, valor) VALUES (?, ?)');
 
   db.transaction(() => {
