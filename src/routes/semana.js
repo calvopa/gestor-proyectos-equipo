@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getDb } = require('../db');
 const { getToken, fetchWeekActivity } = require('../services/clickup');
+const { generateEstimates } = require('../services/estimator');
 
 const SALUD_SCORE = { green: 3, yellow: 2, red: 1, grey: 0, cerrado: -1, backlog: -1 };
 
@@ -48,6 +49,8 @@ router.get('/', async (req, res) => {
         try {
           await fetchWeekActivity(db, from, to, token);
           fetchedFromClickup = true;
+          const est = generateEstimates();
+          if (est.created > 0) console.log(`[semana] ${est.created} estimados generados desde nuevos comentarios`);
         } catch (err) {
           console.error('[semana] fetchWeekActivity error:', err.message);
         }
@@ -138,27 +141,34 @@ router.get('/', async (req, res) => {
         'SELECT ai_summary FROM weekly_snapshots WHERE project_id=? AND week_start=?'
       ).get(p.id, from);
 
+      const horasEst = db.prepare(`
+        SELECT COALESCE(SUM(duracion_seg), 0) as seg_estimado_semana
+        FROM time_entries
+        WHERE project_id=? AND tipo='estimado' AND inicio >= ? AND inicio <= ?
+      `).get(p.id, from + ' 00:00:00', to + ' 23:59:59');
+
       return {
-        id:                 p.id,
-        nombre:             p.nombre,
-        estado:             p.estado,
-        prioridad:          p.prioridad,
-        clickup_status:     p.clickup_status,
-        fecha_fin_est:      p.fecha_fin_est,
-        tecnicos:           p.tecnicos,
-        last_comment_at:    p.last_comment_at,
-        updated_at:         p.updated_at,
+        id:                   p.id,
+        nombre:               p.nombre,
+        estado:               p.estado,
+        prioridad:            p.prioridad,
+        clickup_status:       p.clickup_status,
+        fecha_fin_est:        p.fecha_fin_est,
+        tecnicos:             p.tecnicos,
+        last_comment_at:      p.last_comment_at,
+        updated_at:           p.updated_at,
         salud,
-        salud_prev:         saludPrev,
+        salud_prev:           saludPrev,
         events,
-        event_count:        events.length,
-        has_activity:       events.length > 0,
+        event_count:          events.length,
+        has_activity:         events.length > 0,
         movimiento,
-        dias_inactivo:      diasInactivo,
-        dias_inactivo_prev: prevSnap?.dias_inactivo ?? null,
-        fase_changed:       phaseChanged,
-        fase_prev:          prevSnap?.fase ?? null,
-        ai_summary:         snapRow?.ai_summary ?? null,
+        dias_inactivo:        diasInactivo,
+        dias_inactivo_prev:   prevSnap?.dias_inactivo ?? null,
+        fase_changed:         phaseChanged,
+        fase_prev:            prevSnap?.fase ?? null,
+        ai_summary:           snapRow?.ai_summary ?? null,
+        seg_estimado_semana:  horasEst.seg_estimado_semana,
       };
     });
 

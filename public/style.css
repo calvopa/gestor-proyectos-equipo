@@ -1047,6 +1047,7 @@ tr.fila-yellow:hover td { background: rgba(234,179,8,.09); }
 .sem-mov-down { background: rgba(239,68,68,.15);  color: var(--red); }
 .sem-mov-same { background: rgba(139,143,168,.1); color: var(--text2); }
 .sem-dias-txt { color: var(--text2); font-size: 11px; }
+.sem-horas-est { font-size: 11px; color: #c084fc; background: rgba(192,132,252,.12); padding: 1px 6px; border-radius: 3px; }
 .sem-vence    { font-size: 11px; color: var(--text2); }
 
 .sem-ai-box   { padding-top: 6px; border-top: 1px solid var(--border); }

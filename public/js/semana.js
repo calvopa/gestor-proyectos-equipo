@@ -1,4 +1,10 @@
 // ── Semana helpers ────────────────────────────────────────
+function swFmtHoras(seg) {
+  if (!seg) return null;
+  const h = Math.floor(seg / 3600);
+  const m = Math.floor((seg % 3600) / 60);
+  return h > 0 ? `${h}h ${m > 0 ? m + 'm' : ''}`.trim() : `${m}m`;
+}
 function swMondayOf(date) {
   const d = date ? new Date(date) : new Date();
   const utcMs = d.getTime() - d.getTimezoneOffset() * 60000;
@@ -351,6 +357,7 @@ function semanaCardHtml(p, aiEnabled, weekStart) {
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           ${movTxt}
           ${diasTxt ? `<span class="sem-dias-txt">${diasTxt}</span>` : ''}
+          ${p.seg_estimado_semana ? `<span class="sem-horas-est" title="Horas estimadas desde comentarios esta semana">⏱ ~${swFmtHoras(p.seg_estimado_semana)}</span>` : ''}
         </div>
         ${venceTxt}
       </div>
@@ -519,6 +526,7 @@ function semanaPresentCardHtml(p, weekStart) {
       <div class="sem-pres-bottom">
         ${movTxt}
         ${diasInfo ? `<div class="sem-pres-dias">${diasInfo}</div>` : ''}
+        ${p.seg_estimado_semana ? `<div class="sem-pres-dias">⏱ ~${swFmtHoras(p.seg_estimado_semana)} estimadas</div>` : ''}
         ${venceTxt}
       </div>
       ${aiTxt}
@@ -635,7 +643,10 @@ function semanaExportPDF() {
           <div style="font-size:11px;font-weight:600;color:#4a5568;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">Esta semana · ${p.event_count} ${p.event_count === 1 ? 'update' : 'updates'}</div>
           ${events}
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;flex-wrap:wrap;gap:6px">
-            <span style="font-size:11px;color:#718096">${p.dias_inactivo !== null ? `${p.dias_inactivo}d sin actividad` : ''}</span>
+            <span style="font-size:11px;color:#718096">
+              ${p.dias_inactivo !== null ? `${p.dias_inactivo}d sin actividad` : ''}
+              ${p.seg_estimado_semana ? ` · ⏱ ~${swFmtHoras(p.seg_estimado_semana)} est.` : ''}
+            </span>
             ${venceTxt}
           </div>
           ${aiTxt}
