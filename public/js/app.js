@@ -108,6 +108,7 @@ const routes = {
   'settings':       renderSettings,
   'dashboard':      renderDashboard,
   'semana':         () => renderSemana(),
+  'resumen-horas':  renderResumenHoras,
 };
 
 function navigate(route, params = {}) {
@@ -1517,6 +1518,153 @@ async function renderDashboard() {
   // Links a detalle de proyecto
   main.querySelectorAll('.dash-proj-link').forEach(a =>
     a.addEventListener('click', e => { e.preventDefault(); navigate('project-detail', { id: a.dataset.id }); }));
+}
+
+// ── ⑨ Resumen de horas por proyecto ──────────────────────
+async function renderResumenHoras({ periodo = '7d', soloConHoras = false } = {}) {
+  const main = document.getElementById('main-content');
+  main.innerHTML = '<div class="spinner"></div>';
+
+  const now = new Date();
+  let from = null, to = null;
+
+  if (periodo === '7d') {
+    const day = now.getDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diff);
+    from = monday.toISOString().slice(0, 10);
+    to   = now.toISOString().slice(0, 10);
+  } else if (periodo === '14d') {
+    const d = new Date(now);
+    d.setDate(now.getDate() - 13);
+    from = d.toISOString().slice(0, 10);
+    to   = now.toISOString().slice(0, 10);
+  } else if (periodo === '30d') {
+    const d = new Date(now);
+    d.setDate(now.getDate() - 29);
+    from = d.toISOString().slice(0, 10);
+    to   = now.toISOString().slice(0, 10);
+  }
+
+  const q = {};
+  if (from) q.from = from;
+  if (to)   q.to   = to;
+
+  const data = await api.getResumenHoras(q);
+
+  const sorted = [...data].sort((a, b) =>
+    (b.horas_comentadas + b.horas_registradas) - (a.horas_comentadas + a.horas_registradas)
+  );
+  const filtered = soloConHoras
+    ? sorted.filter(p => p.horas_comentadas > 0 || p.horas_registradas > 0)
+    : sorted;
+
+  const totalComentadas  = filtered.reduce((s, p) => s + p.horas_comentadas, 0);
+  const totalRegistradas = filtered.reduce((s, p) => s + p.horas_registradas, 0);
+  const conActividad     = filtered.filter(p => p.horas_comentadas > 0 || p.horas_registradas > 0).length;
+
+  const PERIODOS = { '7d': 'Esta semana', '14d': 'Últimas 2 semanas', '30d': 'Último mes', 'todo': 'Histórico completo' };
+  const fechaLabel = from && to ? `${from} al ${to}` : 'Histórico completo';
+
+  function fmtH(h) {
+    if (!h || h === 0) return '0h';
+    const hrs = Math.floor(h);
+    const min = Math.round((h - hrs) * 60);
+    if (hrs === 0) return `${min}m`;
+    return min > 0 ? `${hrs}h ${min}m` : `${hrs}h`;
+  }
+
+  function projectCard(p) {
+    const maxActor = Math.max(1, ...p.por_actor.map(a => a.horas));
+    return `
+      <div class="rh-card">
+        <div class="rh-card-header">
+          <div class="rh-card-title">
+            <span class="rh-project-name">${escHtml(p.nombre)}</span>
+            ${badgeEstado(p.estado)}
+            ${p.clickup_status ? `<span class="rh-fase">${escHtml(p.clickup_status)}</span>` : ''}
+          </div>
+          <div class="rh-horas-big">
+            <span class="rh-horas-num">${fmtH(p.horas_comentadas)}</span>
+            <span class="rh-horas-lbl">en comentarios</span>
+          </div>
+        </div>
+        ${p.por_actor.length === 0
+          ? `<div class="rh-empty-actors">Sin menciones de horas en comentarios del período</div>`
+          : `<div class="rh-actors">
+              ${p.por_actor.map(a => {
+                const pct = Math.round((a.horas / maxActor) * 100);
+                return `
+                  <div class="rh-actor-row">
+                    <span class="rh-actor-name">${escHtml(a.actor)}</span>
+                    <div class="rh-actor-bar-wrap"><div class="rh-actor-bar" style="width:${pct}%"></div></div>
+                    <span class="rh-actor-hrs">${fmtH(a.horas)}</span>
+                    <span class="rh-actor-comments">${a.comentarios} coment.</span>
+                  </div>`;
+              }).join('')}
+            </div>`}
+        <div class="rh-card-footer">
+          ${p.horas_registradas > 0
+            ? `<span class="rh-registered">⏱ ${fmtH(p.horas_registradas)} registradas (timer/manual)</span>`
+            : `<span class="rh-registered rh-registered-none">Sin horas registradas</span>`}
+          <span class="rh-total-comments">${p.total_comentarios} comentarios · ${p.comentarios_con_horas} con horas</span>
+        </div>
+      </div>`;
+  }
+
+  main.innerHTML = `
+    <div class="page-header no-print">
+      <div>
+        <h1>Horas por proyecto</h1>
+        <div style="font-size:12px;color:var(--text2);margin-top:3px">${fechaLabel}</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-ghost btn-sm ${soloConHoras ? 'btn-active' : ''}" id="btn-rh-filtro">
+          ${soloConHoras ? '● Solo con actividad' : '○ Solo con actividad'}
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="window.print()">⬇ PDF</button>
+        <button class="btn btn-secondary btn-sm" id="btn-rh-refresh">↻</button>
+      </div>
+    </div>
+
+    <div class="rh-periodo-tabs no-print">
+      ${Object.entries(PERIODOS).map(([key, label]) => `
+        <button class="rh-tab ${periodo === key ? 'active' : ''}" data-periodo="${key}">${label}</button>
+      `).join('')}
+    </div>
+
+    <div class="rh-totales">
+      <div class="rh-total-card">
+        <div class="rh-total-num">${fmtH(totalComentadas)}</div>
+        <div class="rh-total-lbl">Total en comentarios</div>
+      </div>
+      <div class="rh-total-card">
+        <div class="rh-total-num">${fmtH(totalRegistradas)}</div>
+        <div class="rh-total-lbl">Total registradas</div>
+      </div>
+      <div class="rh-total-card">
+        <div class="rh-total-num">${conActividad}</div>
+        <div class="rh-total-lbl">Proyectos con actividad</div>
+      </div>
+    </div>
+
+    <div class="rh-list">
+      ${filtered.length === 0
+        ? `<div class="empty"><div class="empty-icon">📊</div><p>Sin datos de horas para el período seleccionado</p></div>`
+        : filtered.map(projectCard).join('')}
+    </div>
+  `;
+
+  main.querySelectorAll('.rh-tab').forEach(btn =>
+    btn.addEventListener('click', () => renderResumenHoras({ periodo: btn.dataset.periodo, soloConHoras }))
+  );
+  document.getElementById('btn-rh-filtro').addEventListener('click', () =>
+    renderResumenHoras({ periodo, soloConHoras: !soloConHoras })
+  );
+  document.getElementById('btn-rh-refresh').addEventListener('click', () =>
+    renderResumenHoras({ periodo, soloConHoras })
+  );
 }
 
 // ── Boot ──────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getDb } = require('../db');
+const { parseHorasFromText } = require('../services/estimator');
 
 // GET /api/projects/phases — valores distintos de clickup_status en la DB
 router.get('/phases', (req, res) => {
@@ -37,6 +38,93 @@ router.get('/', (req, res) => {
 
   sql += ` GROUP BY p.id ORDER BY ${col} ${order}`;
   res.json(db.prepare(sql).all(...params));
+});
+
+// GET /api/projects/resumen-horas
+// Lista proyectos con horas extraídas de comentarios (weekly_activity) y horas reales registradas (time_entries).
+router.get('/resumen-horas', (req, res) => {
+  const db = getDb();
+
+  const projects = db.prepare(`
+    SELECT id, nombre, estado, clickup_status, prioridad, cuenta_horas
+    FROM projects
+    ORDER BY nombre
+  `).all();
+
+  const { from, to } = req.query;
+  const commentParams = [];
+  let commentSql = `SELECT project_id, actor, detail FROM weekly_activity WHERE event_type = 'comment'`;
+  if (from) { commentSql += ' AND date(event_at) >= ?'; commentParams.push(from); }
+  if (to)   { commentSql += ' AND date(event_at) <= ?'; commentParams.push(to); }
+  const comments = db.prepare(commentSql).all(...commentParams);
+
+  const timeParams = [];
+  let timeSql = `
+    SELECT
+      te.project_id,
+      COALESCE(r.nombre, 'Sin asignar') as recurso,
+      SUM(CASE WHEN te.tipo != 'estimado' THEN COALESCE(te.duracion_seg, 0) ELSE 0 END) as seg_registrados,
+      COUNT(CASE WHEN te.tipo != 'estimado' THEN 1 END) as entradas
+    FROM time_entries te
+    LEFT JOIN resources r ON r.id = te.resource_id
+    WHERE te.fin IS NOT NULL
+  `;
+  if (from) { timeSql += ' AND date(te.inicio) >= ?'; timeParams.push(from); }
+  if (to)   { timeSql += ' AND date(te.inicio) <= ?'; timeParams.push(to); }
+  timeSql += ' GROUP BY te.project_id, te.resource_id';
+  const timeRows = db.prepare(timeSql).all(...timeParams);
+
+  // Procesar comentarios agrupando por proyecto y actor
+  const commentsByProject = {};
+  for (const c of comments) {
+    if (!commentsByProject[c.project_id]) {
+      commentsByProject[c.project_id] = { total: 0, conHoras: 0, segTotal: 0, porActor: {} };
+    }
+    const p = commentsByProject[c.project_id];
+    p.total++;
+
+    const seg = parseHorasFromText(c.detail);
+    if (seg !== null) {
+      p.conHoras++;
+      p.segTotal += seg;
+      if (!p.porActor[c.actor]) p.porActor[c.actor] = { seg: 0, comentarios: 0 };
+      p.porActor[c.actor].seg += seg;
+      p.porActor[c.actor].comentarios++;
+    }
+  }
+
+  // Procesar time_entries agrupando por proyecto
+  const timeByProject = {};
+  for (const t of timeRows) {
+    if (!timeByProject[t.project_id]) timeByProject[t.project_id] = { seg: 0, entradas: 0 };
+    timeByProject[t.project_id].seg += t.seg_registrados || 0;
+    timeByProject[t.project_id].entradas += t.entradas || 0;
+  }
+
+  const segToHoras = seg => Math.round((seg / 3600) * 100) / 100;
+
+  const result = projects.map(p => {
+    const cp = commentsByProject[p.id] || { total: 0, conHoras: 0, segTotal: 0, porActor: {} };
+    const tp = timeByProject[p.id] || { seg: 0, entradas: 0 };
+
+    return {
+      id: p.id,
+      nombre: p.nombre,
+      estado: p.estado,
+      clickup_status: p.clickup_status,
+      prioridad: p.prioridad,
+      total_comentarios: cp.total,
+      comentarios_con_horas: cp.conHoras,
+      horas_comentadas: segToHoras(cp.segTotal),
+      horas_registradas: segToHoras(tp.seg),
+      entradas_registradas: tp.entradas,
+      por_actor: Object.entries(cp.porActor)
+        .map(([actor, d]) => ({ actor, horas: segToHoras(d.seg), comentarios: d.comentarios }))
+        .sort((a, b) => b.horas - a.horas)
+    };
+  });
+
+  res.json(result);
 });
 
 router.get('/:id', (req, res) => {

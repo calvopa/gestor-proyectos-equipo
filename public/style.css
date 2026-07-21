@@ -1224,6 +1224,130 @@ tr.fila-yellow:hover td { background: rgba(234,179,8,.09); }
 }
 .sem-pres-dot.active { background: #6c63ff; width: 20px; border-radius: 4px; }
 
+/* ── Resumen Horas ── */
+.rh-periodo-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 20px;
+}
+.rh-tab {
+  padding: 7px 16px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--text2);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  transition: all .15s;
+}
+.rh-tab:hover  { background: var(--bg3); color: var(--text); }
+.rh-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.rh-totales {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.rh-total-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px 22px;
+  text-align: center;
+}
+.rh-total-num {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--accent);
+  line-height: 1;
+  margin-bottom: 6px;
+}
+.rh-total-lbl {
+  font-size: 11px;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+
+.rh-list { display: flex; flex-direction: column; gap: 12px; }
+
+.rh-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+}
+.rh-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.rh-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.rh-project-name { font-size: 16px; font-weight: 700; }
+.rh-fase {
+  font-size: 11px;
+  color: var(--text2);
+  background: var(--bg3);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.rh-horas-big  { text-align: right; flex-shrink: 0; }
+.rh-horas-num  { font-size: 30px; font-weight: 800; color: var(--green); line-height: 1; display: block; }
+.rh-horas-lbl  { font-size: 11px; color: var(--text2); display: block; margin-top: 3px; }
+
+.rh-actors { display: flex; flex-direction: column; gap: 9px; margin-bottom: 14px; }
+.rh-actor-row {
+  display: grid;
+  grid-template-columns: 150px 1fr 64px 80px;
+  align-items: center;
+  gap: 10px;
+}
+.rh-actor-name {
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rh-actor-bar-wrap {
+  background: var(--bg3);
+  border-radius: 4px;
+  height: 10px;
+  overflow: hidden;
+}
+.rh-actor-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width .3s ease;
+}
+.rh-actor-hrs      { font-size: 13px; font-weight: 600; text-align: right; }
+.rh-actor-comments { font-size: 11px; color: var(--text2); }
+
+.rh-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.rh-registered       { font-size: 12px; color: var(--text2); }
+.rh-registered-none  { opacity: .45; }
+.rh-total-comments   { font-size: 11px; color: var(--text2); }
+.rh-empty-actors     { font-size: 13px; color: var(--text2); font-style: italic; margin-bottom: 12px; }
+
+.btn-active { background: var(--accent) !important; color: #fff !important; border-color: var(--accent) !important; }
+
 /* ── Print styles ── */
 @media print {
   body { background: #fff; color: #000; font-size: 12px; }
@@ -1242,5 +1366,14 @@ tr.fila-yellow:hover td { background: rgba(234,179,8,.09); }
   .dias-badge.dias-yellow { color: #960 !important; border-color: #960 !important; }
   .tec-chip { border: 1px solid #ccc !important; background: #f5f5f5 !important; color: #333 !important; }
   a { color: #00c !important; }
+  .rh-card { border: 1px solid #ccc !important; background: #fff !important; break-inside: avoid; margin-bottom: 12px; }
+  .rh-total-card { border: 1px solid #ccc !important; background: #f9f9f9 !important; }
+  .rh-total-num, .rh-horas-num { color: #111 !important; }
+  .rh-actor-bar { background: #333 !important; }
+  .rh-actor-bar-wrap { background: #ddd !important; }
+  .rh-project-name, .rh-actor-hrs { color: #000 !important; }
+  .rh-registered, .rh-total-comments, .rh-actor-comments, .rh-horas-lbl, .rh-total-lbl, .rh-empty-actors { color: #555 !important; }
+  .rh-fase { background: #eee !important; color: #555 !important; }
+  .rh-card-footer { border-top-color: #ccc !important; }
   @page { margin: 16mm; }
 }

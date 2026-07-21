@@ -13,6 +13,7 @@ const api = {
   // Projects
   getProjects: (q = {}) => api._fetch('/api/projects?' + new URLSearchParams(q)),
   getPhases: () => api._fetch('/api/projects/phases'),
+  getResumenHoras: (q = {}) => api._fetch('/api/projects/resumen-horas?' + new URLSearchParams(q)),
   getProject: (id) => api._fetch(`/api/projects/${id}`),
   createProject: (body) => api._fetch('/api/projects', { method: 'POST', body }),
   updateProject: (id, body) => api._fetch(`/api/projects/${id}`, { method: 'PUT', body }),
