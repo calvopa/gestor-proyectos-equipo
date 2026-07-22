@@ -24,7 +24,7 @@ router.get('/', (req, res) => {
 // POST /api/time/start — iniciar timer
 router.post('/start', (req, res) => {
   const db = getDb();
-  const { project_id, resource_id } = req.body;
+  const { project_id, resource_id, nota } = req.body;
   if (!project_id) return res.status(400).json({ error: 'project_id requerido' });
 
   // Solo un timer activo por proyecto
@@ -34,9 +34,9 @@ router.post('/start', (req, res) => {
   if (active) return res.status(409).json({ error: 'timer ya activo', entry: active });
 
   const result = db.prepare(`
-    INSERT INTO time_entries (project_id, resource_id, tipo, inicio)
-    VALUES (?, ?, 'timer', datetime('now'))
-  `).run(project_id, resource_id || null);
+    INSERT INTO time_entries (project_id, resource_id, tipo, inicio, nota)
+    VALUES (?, ?, 'timer', datetime('now'), ?)
+  `).run(project_id, resource_id || null, nota || null);
 
   res.status(201).json(db.prepare('SELECT * FROM time_entries WHERE id=?').get(result.lastInsertRowid));
 });

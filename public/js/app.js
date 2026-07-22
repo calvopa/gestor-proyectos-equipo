@@ -656,7 +656,7 @@ async function renderKanban() {
 // ── ③ Project detail ──────────────────────────────────────
 async function renderProjectDetail({ id }) {
   const main = document.getElementById('main-content');
-  const p = await api.getProject(id);
+  const [p, resources] = await Promise.all([api.getProject(id), api.getResources({ activo: '1' })]);
 
   main.innerHTML = `
     <div class="page-header">
@@ -712,17 +712,25 @@ async function renderProjectDetail({ id }) {
         <div class="timer-section">
           <div>
             <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:4px">Timer</div>
-            <div class="timer-display" id="timer-display">${p.activeTimer ? '▶ activo' : '00:00:00'}</div>
+            <div class="timer-display ${p.activeTimer ? 'running' : ''}" id="timer-display">${p.activeTimer ? fmtSecTimer(Math.max(0, Math.floor((Date.now() - new Date(p.activeTimer.inicio.replace(' ','T')+'Z')) / 1000))) : '00:00:00'}</div>
           </div>
           <div style="display:flex;flex-direction:column;gap:6px">
             <button class="btn btn-primary" id="btn-timer-toggle">
               ${p.activeTimer ? '⏹ Detener' : '▶ Iniciar'}
             </button>
           </div>
-          <div style="flex:1"></div>
-          <button class="btn btn-secondary btn-sm" id="btn-manual">+ Manual</button>
-          <button class="btn btn-secondary btn-sm" id="btn-estimate" title="Generar horas estimadas desde comentarios de ClickUp">⚡ Estimar</button>
-          <button class="btn btn-ghost btn-sm" id="btn-clear-estimates" title="Eliminar horas estimadas de este proyecto">✕ Estimados</button>
+          <div class="timer-resource-row">
+            <select id="timer-resource" style="font-size:12px;flex:1" ${p.activeTimer ? 'disabled' : ''}>
+              <option value="">Recurso (opcional)</option>
+              ${resources.map(r => `<option value="${r.id}" ${p.activeTimer?.resource_id == r.id ? 'selected' : ''}>${escHtml(r.nombre)}</option>`).join('')}
+            </select>
+            <input type="text" id="timer-nota" placeholder="Nota (opcional)" style="font-size:12px;flex:1" ${p.activeTimer ? 'disabled' : ''}>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin-left:auto">
+            <button class="btn btn-secondary btn-sm" id="btn-manual">+ Manual</button>
+            <button class="btn btn-secondary btn-sm" id="btn-estimate" title="Generar horas estimadas desde comentarios de ClickUp">⚡ Estimar</button>
+            <button class="btn btn-ghost btn-sm" id="btn-clear-estimates" title="Eliminar horas estimadas de este proyecto">✕ Estimados</button>
+          </div>
         </div>
 
         <!-- Entries -->
@@ -806,18 +814,23 @@ async function renderProjectDetail({ id }) {
         clearInterval(timerInterval);
         document.getElementById('timer-display').textContent = '00:00:00';
         document.getElementById('timer-display').classList.remove('running');
+        document.getElementById('timer-resource').disabled = false;
+        document.getElementById('timer-nota').disabled = false;
         btn.textContent = '▶ Iniciar';
         activeEntry = null;
         toast('Timer detenido', 'success');
         loadEntries(id);
-        // Refresh stats
         api.getProject(id).then(fresh => {
           document.getElementById('stat-contadas').textContent = fmtSec(fresh.hours?.seg_contados);
           document.getElementById('stat-total').textContent = fmtSec(fresh.hours?.seg_total);
           if (document.getElementById('stat-estimado')) document.getElementById('stat-estimado').textContent = fmtSec(fresh.hours?.seg_estimado);
         });
       } else {
-        activeEntry = await api.startTimer({ project_id: id });
+        const resource_id = document.getElementById('timer-resource').value || null;
+        const nota = document.getElementById('timer-nota').value.trim() || null;
+        activeEntry = await api.startTimer({ project_id: id, resource_id, nota });
+        document.getElementById('timer-resource').disabled = true;
+        document.getElementById('timer-nota').disabled = true;
         btn.textContent = '⏹ Detener';
         startDisplay(activeEntry);
         toast('Timer iniciado', 'success');
@@ -890,15 +903,33 @@ async function loadEntries(projectId) {
     container.innerHTML = '<p style="color:var(--text2);font-size:13px;padding:8px 0">Sin registros todavía</p>';
     return;
   }
-  container.innerHTML = entries.map(e => `
-    <div class="entry-item">
-      <span class="entry-type ${e.tipo}">${e.tipo}</span>
-      <span class="entry-time">${fmtSec(e.duracion_seg)}</span>
-      <span class="entry-note">${escHtml(e.nota || '—')} <span style="font-size:11px">${e.resource_nombre ? '· ' + escHtml(e.resource_nombre) : ''}</span></span>
-      <span style="color:var(--text2);font-size:12px">${new Date(e.inicio).toLocaleDateString('es-AR')}</span>
-      <button class="btn btn-ghost btn-sm btn-del-entry" data-id="${e.id}">✕</button>
-    </div>
-  `).join('');
+
+  // Group by date (local date string)
+  const byDate = {};
+  for (const e of entries) {
+    const d = new Date(e.inicio).toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short' });
+    (byDate[d] = byDate[d] || []).push(e);
+  }
+
+  container.innerHTML = Object.entries(byDate).map(([dateStr, group]) => {
+    const subtotal = group.reduce((s, e) => s + (e.duracion_seg || 0), 0);
+    return `
+      <div class="entry-date-group">
+        <div class="entry-date-header">
+          <span>${dateStr}</span>
+          <span class="entry-date-subtotal">${fmtSec(subtotal)}</span>
+        </div>
+        ${group.map(e => `
+          <div class="entry-item">
+            <span class="entry-type ${e.tipo}">${e.tipo}</span>
+            <span class="entry-time">${fmtSec(e.duracion_seg)}</span>
+            <span class="entry-note">${escHtml(e.nota || '—')}</span>
+            ${e.resource_nombre ? `<span class="entry-resource">👤 ${escHtml(e.resource_nombre)}</span>` : ''}
+            <button class="btn btn-ghost btn-sm btn-del-entry" data-id="${e.id}" title="Eliminar">✕</button>
+          </div>
+        `).join('')}
+      </div>`;
+  }).join('');
 
   container.querySelectorAll('.btn-del-entry').forEach(b =>
     b.addEventListener('click', async () => {
@@ -909,17 +940,35 @@ async function loadEntries(projectId) {
     }));
 }
 
-function showManualModal(projectId, onSave) {
+async function showManualModal(projectId, onSave) {
   const now = new Date();
   const localIso = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  const resources = await api.getResources({ activo: '1' });
   const overlay = el(`
     <div class="modal-overlay">
       <div class="modal">
         <h2>Carga manual de horas</h2>
         <div class="form-group"><label>Fecha y hora de inicio</label><input type="datetime-local" id="mn-inicio" value="${localIso}"></div>
-        <div class="form-row">
-          <div class="form-group"><label>Horas</label><input type="number" id="mn-h" min="0" max="24" value="1"></div>
-          <div class="form-group"><label>Minutos</label><input type="number" id="mn-m" min="0" max="59" value="0"></div>
+        <div class="form-group">
+          <label>Duración</label>
+          <div class="duration-presets">
+            <button class="duration-preset" data-h="0" data-m="30">30m</button>
+            <button class="duration-preset" data-h="1" data-m="0">1h</button>
+            <button class="duration-preset" data-h="2" data-m="0">2h</button>
+            <button class="duration-preset" data-h="4" data-m="0">4h</button>
+            <button class="duration-preset" data-h="8" data-m="0">8h</button>
+          </div>
+          <div class="form-row">
+            <div class="form-group" style="margin-bottom:0"><label>Horas</label><input type="number" id="mn-h" min="0" max="24" value="1"></div>
+            <div class="form-group" style="margin-bottom:0"><label>Minutos</label><input type="number" id="mn-m" min="0" max="59" value="0"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Recurso (opcional)</label>
+          <select id="mn-resource">
+            <option value="">Sin asignar</option>
+            ${resources.map(r => `<option value="${r.id}">${escHtml(r.nombre)}${r.rol ? ' · ' + escHtml(r.rol) : ''}</option>`).join('')}
+          </select>
         </div>
         <div class="form-group"><label>Nota (opcional)</label><input type="text" id="mn-nota" placeholder="Descripción de la tarea..."></div>
         <div class="modal-footer">
@@ -933,6 +982,14 @@ function showManualModal(projectId, onSave) {
   document.getElementById('mn-h').focus();
   overlay.querySelector('#mn-cancel').addEventListener('click', () => overlay.remove());
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+
+  overlay.querySelectorAll('.duration-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.getElementById('mn-h').value = btn.dataset.h;
+      document.getElementById('mn-m').value = btn.dataset.m;
+    });
+  });
+
   overlay.querySelector('#mn-save').addEventListener('click', async () => {
     const h = parseInt(document.getElementById('mn-h').value, 10) || 0;
     const m = parseInt(document.getElementById('mn-m').value, 10) || 0;
@@ -940,8 +997,9 @@ function showManualModal(projectId, onSave) {
     if (duracion_seg <= 0) return toast('Duración debe ser mayor a 0', 'error');
     const inicio = new Date(document.getElementById('mn-inicio').value).toISOString().replace('T', ' ').replace(/\.\d+Z$/, '');
     const nota = document.getElementById('mn-nota').value.trim() || null;
+    const resource_id = document.getElementById('mn-resource').value || null;
     try {
-      await api.addManual({ project_id: projectId, inicio, duracion_seg, nota });
+      await api.addManual({ project_id: projectId, inicio, duracion_seg, nota, resource_id });
       toast('Horas registradas', 'success');
       overlay.remove();
       onSave?.();
@@ -1521,7 +1579,7 @@ async function renderDashboard() {
 }
 
 // ── ⑨ Resumen de horas por proyecto ──────────────────────
-async function renderResumenHoras({ periodo = '7d', soloConHoras = false } = {}) {
+async function renderResumenHoras({ periodo = '7d', soloConHoras = false, vista = 'proyectos' } = {}) {
   const main = document.getElementById('main-content');
   main.innerHTML = '<div class="spinner"></div>';
 
@@ -1562,6 +1620,7 @@ async function renderResumenHoras({ periodo = '7d', soloConHoras = false } = {})
 
   const totalComentadas  = filtered.reduce((s, p) => s + p.horas_comentadas, 0);
   const totalRegistradas = filtered.reduce((s, p) => s + p.horas_registradas, 0);
+  const totalCombinado   = totalComentadas + totalRegistradas;
   const conActividad     = filtered.filter(p => p.horas_comentadas > 0 || p.horas_registradas > 0).length;
 
   const PERIODOS = { '7d': 'Esta semana', '14d': 'Últimas 2 semanas', '30d': 'Último mes', 'todo': 'Histórico completo' };
@@ -1578,7 +1637,7 @@ async function renderResumenHoras({ periodo = '7d', soloConHoras = false } = {})
   function projectCard(p) {
     const maxActor = Math.max(1, ...p.por_actor.map(a => a.horas));
     return `
-      <div class="rh-card">
+      <div class="rh-card rh-card-clickable" data-project-id="${p.id}">
         <div class="rh-card-header">
           <div class="rh-card-title">
             <span class="rh-project-name">${escHtml(p.nombre)}</span>
@@ -1588,6 +1647,7 @@ async function renderResumenHoras({ periodo = '7d', soloConHoras = false } = {})
           <div class="rh-horas-big">
             <span class="rh-horas-num">${fmtH(p.horas_comentadas)}</span>
             <span class="rh-horas-lbl">en comentarios</span>
+            ${p.horas_registradas > 0 ? `<span class="rh-horas-lbl" style="color:var(--accent)">+ ${fmtH(p.horas_registradas)} timer</span>` : ''}
           </div>
         </div>
         ${p.por_actor.length === 0
@@ -1613,10 +1673,54 @@ async function renderResumenHoras({ periodo = '7d', soloConHoras = false } = {})
       </div>`;
   }
 
+  // Build pivot "por persona" from por_actor data
+  function buildPersonaPivot() {
+    const personas = {};
+    for (const p of filtered) {
+      for (const a of p.por_actor) {
+        if (!personas[a.actor]) personas[a.actor] = { nombre: a.actor, total: 0, proyectos: [] };
+        personas[a.actor].total += a.horas;
+        personas[a.actor].proyectos.push({ nombre: p.nombre, id: p.id, horas: a.horas });
+      }
+    }
+    return Object.values(personas).sort((a, b) => b.total - a.total);
+  }
+
+  function personaCard(persona) {
+    const maxH = Math.max(1, ...persona.proyectos.map(p => p.horas));
+    return `
+      <div class="rh-persona-card">
+        <div class="rh-persona-header">
+          <span class="rh-persona-name">👤 ${escHtml(persona.nombre)}</span>
+          <span class="rh-persona-total">${fmtH(persona.total)}</span>
+        </div>
+        <div class="rh-persona-projects">
+          ${persona.proyectos.map(p => {
+            const pct = Math.round((p.horas / maxH) * 100);
+            return `
+              <div class="rh-persona-proj-row">
+                <span class="rh-persona-proj-name">${escHtml(p.nombre)}</span>
+                <div class="rh-persona-proj-bar-wrap"><div class="rh-persona-proj-bar" style="width:${pct}%"></div></div>
+                <span class="rh-persona-proj-hrs">${fmtH(p.horas)}</span>
+              </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }
+
+  const personas = buildPersonaPivot();
+  const listaContent = vista === 'personas'
+    ? (personas.length === 0
+        ? `<div class="empty"><div class="empty-icon">👥</div><p>Sin menciones de horas por persona en el período</p></div>`
+        : personas.map(personaCard).join(''))
+    : (filtered.length === 0
+        ? `<div class="empty"><div class="empty-icon">📊</div><p>Sin datos de horas para el período seleccionado</p></div>`
+        : filtered.map(projectCard).join(''));
+
   main.innerHTML = `
     <div class="page-header no-print">
       <div>
-        <h1>Horas por proyecto</h1>
+        <h1>Resumen de horas</h1>
         <div style="font-size:12px;color:var(--text2);margin-top:3px">${fechaLabel}</div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
@@ -1641,29 +1745,44 @@ async function renderResumenHoras({ periodo = '7d', soloConHoras = false } = {})
       </div>
       <div class="rh-total-card">
         <div class="rh-total-num">${fmtH(totalRegistradas)}</div>
-        <div class="rh-total-lbl">Total registradas</div>
+        <div class="rh-total-lbl">Total registradas (timer)</div>
+      </div>
+      <div class="rh-total-card" style="border-color:var(--accent)">
+        <div class="rh-total-num" style="color:var(--green)">${fmtH(totalCombinado)}</div>
+        <div class="rh-total-lbl">Total combinado</div>
       </div>
       <div class="rh-total-card">
-        <div class="rh-total-num">${conActividad}</div>
+        <div class="rh-total-num" style="font-size:22px">${conActividad}</div>
         <div class="rh-total-lbl">Proyectos con actividad</div>
       </div>
     </div>
 
+    <div class="rh-view-tabs no-print">
+      <button class="rh-view-tab ${vista === 'proyectos' ? 'active' : ''}" data-vista="proyectos">Por proyecto</button>
+      <button class="rh-view-tab ${vista === 'personas' ? 'active' : ''}" data-vista="personas">Por persona</button>
+    </div>
+
     <div class="rh-list">
-      ${filtered.length === 0
-        ? `<div class="empty"><div class="empty-icon">📊</div><p>Sin datos de horas para el período seleccionado</p></div>`
-        : filtered.map(projectCard).join('')}
+      ${listaContent}
     </div>
   `;
 
   main.querySelectorAll('.rh-tab').forEach(btn =>
-    btn.addEventListener('click', () => renderResumenHoras({ periodo: btn.dataset.periodo, soloConHoras }))
+    btn.addEventListener('click', () => renderResumenHoras({ periodo: btn.dataset.periodo, soloConHoras, vista }))
+  );
+  main.querySelectorAll('.rh-view-tab').forEach(btn =>
+    btn.addEventListener('click', () => renderResumenHoras({ periodo, soloConHoras, vista: btn.dataset.vista }))
   );
   document.getElementById('btn-rh-filtro').addEventListener('click', () =>
-    renderResumenHoras({ periodo, soloConHoras: !soloConHoras })
+    renderResumenHoras({ periodo, soloConHoras: !soloConHoras, vista })
   );
   document.getElementById('btn-rh-refresh').addEventListener('click', () =>
-    renderResumenHoras({ periodo, soloConHoras })
+    renderResumenHoras({ periodo, soloConHoras, vista })
+  );
+
+  // Clickable project cards
+  main.querySelectorAll('.rh-card-clickable').forEach(card =>
+    card.addEventListener('click', () => navigate('project-detail', { id: card.dataset.projectId }))
   );
 }
 
