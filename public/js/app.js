@@ -340,7 +340,10 @@ async function renderProjects({ search = '', estado = '', prioridad = '', fase =
         ${enRiesgo ? `<span class="alerta-pill alerta-red">🔴 ${enRiesgo} en riesgo</span>` : ''}
         ${atencion ? `<span class="alerta-pill alerta-yellow">🟡 ${atencion} con atención</span>` : ''}
       </div>
-      <button class="btn btn-primary" id="btn-new-project">＋ Nuevo proyecto</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-secondary btn-sm" id="btn-export-sheets-projects">📊 Exportar a Sheets</button>
+        <button class="btn btn-primary" id="btn-new-project">＋ Nuevo proyecto</button>
+      </div>
     </div>
     <div class="filters">
       <input type="text" id="f-search" placeholder="Buscar..." value="${escHtml(search)}" style="flex:2;min-width:160px">
@@ -495,6 +498,7 @@ async function renderProjects({ search = '', estado = '', prioridad = '', fase =
     }));
   });
 
+  document.getElementById('btn-export-sheets-projects').addEventListener('click', () => projectsExportSheets(filtered));
   document.getElementById('btn-new-project').addEventListener('click', () => showProjectModal());
   main.querySelectorAll('.project-link').forEach(a =>
     a.addEventListener('click', e => { e.preventDefault(); navigate('project-detail', { id: a.dataset.id }); }));
@@ -507,6 +511,35 @@ async function renderProjects({ search = '', estado = '', prioridad = '', fase =
       toast('Proyecto eliminado', 'success');
       renderProjects({ search, estado, prioridad, fase, tecnico, sort, dir });
     }));
+}
+
+// ── Projects → Sheets export ──────────────────────────────
+async function projectsExportSheets(projects) {
+  const btn = document.getElementById('btn-export-sheets-projects');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Exportando...'; }
+
+  try {
+    const result = await api._fetch('/api/export/sheets', {
+      method: 'POST',
+      body: {
+        type: 'projects',
+        exported_at: new Date().toISOString(),
+        total: projects.length,
+        projects,
+      },
+    });
+    if (result.ok) {
+      toast(`✅ Exportado a Sheets · Solapa "${result.tab}" · ${result.rows} filas`, 'success', 5000);
+    } else {
+      toast(`Error: ${result.error}`, 'error', 5000);
+    }
+  } catch (e) {
+    toast(e.message === 'sheets_webhook_url no configurada en Ajustes'
+      ? '⚙️ Configurá la Sheets webhook URL en Ajustes primero'
+      : e.message, 'error', 6000);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '📊 Exportar a Sheets'; }
+  }
 }
 
 // ── Project modal ─────────────────────────────────────────
