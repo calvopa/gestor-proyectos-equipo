@@ -15,6 +15,7 @@ const api = {
   getPhases: () => api._fetch('/api/projects/phases'),
   getResumenHoras: (q = {}) => api._fetch('/api/projects/resumen-horas?' + new URLSearchParams(q)),
   getProject: (id) => api._fetch(`/api/projects/${id}`),
+  getProjectAiSummary: (id) => api._fetch(`/api/projects/${id}/ai-summary`, { method: 'POST', body: {} }),
   createProject: (body) => api._fetch('/api/projects', { method: 'POST', body }),
   updateProject: (id, body) => api._fetch(`/api/projects/${id}`, { method: 'PUT', body }),
   deleteProject: (id) => api._fetch(`/api/projects/${id}`, { method: 'DELETE' }),

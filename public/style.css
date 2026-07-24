@@ -1492,3 +1492,25 @@ tr.fila-yellow:hover td { background: rgba(234,179,8,.09); }
   .rh-card-footer { border-top-color: #ccc !important; }
   @page { margin: 16mm; }
 }
+
+/* ── Project AI summary row ── */
+.proj-ai-box {
+  padding: 10px 16px;
+  background: rgba(108,99,255,.06);
+  border-top: 1px solid var(--border);
+}
+.proj-ai-result {
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.7;
+  white-space: pre-line;
+}
+.proj-ai-loading {
+  font-size: 12px;
+  color: var(--text2);
+  font-style: italic;
+}
+.proj-ai-error {
+  font-size: 12px;
+  color: var(--red);
+}

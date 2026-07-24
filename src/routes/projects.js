@@ -127,6 +127,86 @@ router.get('/resumen-horas', (req, res) => {
   res.json(result);
 });
 
+// POST /api/projects/:id/ai-summary
+router.post('/:id/ai-summary', async (req, res) => {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return res.status(503).json({ error: 'ANTHROPIC_API_KEY no configurado en el servidor' });
+
+  try {
+    const db = getDb();
+    const project = db.prepare(`
+      SELECT p.*, GROUP_CONCAT(DISTINCT r.nombre) as tecnicos
+      FROM projects p
+      LEFT JOIN assignments a ON a.project_id = p.id
+      LEFT JOIN resources r ON r.id = a.resource_id
+      WHERE p.id = ?
+      GROUP BY p.id
+    `).get(req.params.id);
+
+    if (!project) return res.status(404).json({ error: 'not found' });
+
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 90);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+
+    const events = db.prepare(`
+      SELECT event_type, actor, detail, event_at
+      FROM weekly_activity
+      WHERE project_id = ? AND date(event_at) >= ?
+      ORDER BY event_at DESC
+      LIMIT 40
+    `).all(req.params.id, cutoffStr);
+
+    const context = [
+      `Proyecto: ${project.nombre}`,
+      `Estado: ${project.estado}${project.clickup_status ? ' / ' + project.clickup_status : ''}`,
+      project.prioridad   ? `Prioridad: ${project.prioridad}`     : '',
+      project.tecnicos    ? `Técnicos: ${project.tecnicos}`        : '',
+      project.fecha_fin_est ? `Fecha límite: ${project.fecha_fin_est}` : '',
+    ].filter(Boolean).join('\n');
+
+    const lines = events.length
+      ? events.map(e => `- ${e.actor || '—'} (${e.event_at.slice(0, 10)}): ${e.detail}`).join('\n')
+      : project.last_comment_text
+        ? `- ${project.last_comment_by || '—'} (${(project.last_comment_at || '').slice(0, 10)}): ${project.last_comment_text}`
+        : '(sin actividad reciente registrada)';
+
+    const prompt = `Sos asistente de un equipo técnico. Con la información del proyecto, generá un resumen de exactamente 3 líneas con este formato:
+▸ Estado actual: [en qué punto está el proyecto]
+▸ Último avance: [qué se hizo recientemente]
+▸ Atención: [riesgos, bloqueos o próximos pasos críticos]
+Sé conciso y técnico. No uses otros emojis ni markdown.
+
+${context}
+
+Actividad reciente (más reciente primero):
+${lines}`;
+
+    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': key,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    const data = await apiRes.json();
+    if (!apiRes.ok) throw new Error(data.error?.message || `Anthropic API ${apiRes.status}`);
+    const summary = data.content?.[0]?.text?.trim() || 'No se pudo generar resumen.';
+
+    res.json({ summary });
+  } catch (err) {
+    console.error('[projects] AI summary error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get('/:id', (req, res) => {
   const db = getDb();
   const project = db.prepare('SELECT * FROM projects WHERE id=?').get(req.params.id);

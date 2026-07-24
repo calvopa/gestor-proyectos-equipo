@@ -311,6 +311,8 @@ async function renderDashboard() {
 }
 
 // ── ① Projects table ──────────────────────────────────────
+const projectAiCache = new Map();
+
 function saveProjectFilters(f) {
   try { localStorage.setItem('gestor_proj_filters', JSON.stringify(f)); } catch {}
 }
@@ -445,8 +447,14 @@ async function renderProjects(params = {}) {
                   </td>
                   <td id="hours-${p.id}" style="font-size:13px">—</td>
                   <td style="white-space:nowrap">
+                    <button class="btn btn-ghost btn-sm btn-ai-project" data-id="${p.id}" title="Resumen IA">✨</button>
                     <button class="btn btn-ghost btn-sm btn-edit-project" data-id="${p.id}">✎</button>
                     <button class="btn btn-danger btn-sm btn-del-project" data-id="${p.id}">✕</button>
+                  </td>
+                </tr>
+                <tr class="ai-summary-row" id="ai-row-${p.id}" style="display:none">
+                  <td colspan="10" style="padding:0">
+                    <div id="ai-box-${p.id}" class="proj-ai-box"></div>
                   </td>
                 </tr>`;
               }).join('')}
@@ -519,6 +527,33 @@ async function renderProjects(params = {}) {
     th.addEventListener('click', () => renderProjects({
       ...getFilters(), sort: th.dataset.col, dir: th.dataset.dir, soloRiesgo
     }));
+  });
+
+  main.querySelectorAll('.btn-ai-project').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id  = btn.dataset.id;
+      const row = document.getElementById(`ai-row-${id}`);
+      const box = document.getElementById(`ai-box-${id}`);
+      // Toggle off
+      if (row.style.display !== 'none') { row.style.display = 'none'; return; }
+      row.style.display = '';
+      // Cached result
+      if (projectAiCache.has(id)) {
+        box.innerHTML = `<div class="proj-ai-result">${escHtml(projectAiCache.get(id))}</div>`;
+        return;
+      }
+      box.innerHTML = '<div class="proj-ai-loading">✨ Generando resumen con IA…</div>';
+      btn.disabled = true;
+      try {
+        const { summary } = await api.getProjectAiSummary(id);
+        projectAiCache.set(id, summary);
+        box.innerHTML = `<div class="proj-ai-result">${escHtml(summary)}</div>`;
+      } catch (e) {
+        box.innerHTML = `<div class="proj-ai-error">${escHtml(e.message)}</div>`;
+      } finally {
+        btn.disabled = false;
+      }
+    });
   });
 
   document.getElementById('btn-export-sheets-projects').addEventListener('click', () => projectsExportSheets(filtered));
