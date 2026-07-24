@@ -311,7 +311,30 @@ async function renderDashboard() {
 }
 
 // ── ① Projects table ──────────────────────────────────────
-async function renderProjects({ search = '', estado = '', prioridad = '', fase = '', tecnico = '', sort = 'updated_at', dir = 'desc', soloRiesgo = false, focusSearch = false } = {}) {
+function saveProjectFilters(f) {
+  try { localStorage.setItem('gestor_proj_filters', JSON.stringify(f)); } catch {}
+}
+function loadProjectFilters() {
+  try { return JSON.parse(localStorage.getItem('gestor_proj_filters') || 'null'); } catch { return null; }
+}
+
+async function renderProjects(params = {}) {
+  const fromNav = Object.keys(params).length === 0;
+  const saved   = fromNav ? (loadProjectFilters() || {}) : {};
+  const {
+    search    = saved.search    ?? '',
+    estado    = saved.estado    ?? '',
+    prioridad = saved.prioridad ?? '',
+    fase      = saved.fase      ?? '',
+    tecnico   = saved.tecnico   ?? '',
+    sort      = saved.sort      ?? 'updated_at',
+    dir       = saved.dir       ?? 'desc',
+    soloRiesgo = saved.soloRiesgo ?? false,
+    focusSearch = false,
+  } = params;
+
+  saveProjectFilters({ search, estado, prioridad, fase, tecnico, sort, dir, soloRiesgo });
+
   const main = document.getElementById('main-content');
   main.innerHTML = '<div class="spinner"></div>';
 
