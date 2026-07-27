@@ -1,3 +1,25 @@
+// ── Tema ───────────────────────────────────────────────────
+(function initTheme() {
+  const saved = localStorage.getItem('gestor_theme') || 'dark';
+  document.documentElement.dataset.theme = saved === 'flat' ? 'flat' : '';
+  document.addEventListener('DOMContentLoaded', () => syncThemeBtns(saved));
+})();
+
+function syncThemeBtns(theme) {
+  document.querySelectorAll('[data-theme-btn]').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.themeBtn === theme);
+  });
+}
+
+document.addEventListener('click', e => {
+  const btn = e.target.closest('[data-theme-btn]');
+  if (!btn) return;
+  const theme = btn.dataset.themeBtn;
+  document.documentElement.dataset.theme = theme === 'flat' ? 'flat' : '';
+  localStorage.setItem('gestor_theme', theme);
+  syncThemeBtns(theme);
+});
+
 // ── State ──────────────────────────────────────────────────
 const state = {
   route: null,
