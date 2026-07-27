@@ -1,7 +1,8 @@
 // ── Tema ───────────────────────────────────────────────────
 (function initTheme() {
   const saved = localStorage.getItem('gestor_theme') || 'dark';
-  document.documentElement.dataset.theme = saved === 'flat' ? 'flat' : '';
+  const valid = ['flat', 'skeu'];
+  document.documentElement.dataset.theme = valid.includes(saved) ? saved : '';
   document.addEventListener('DOMContentLoaded', () => syncThemeBtns(saved));
 })();
 
@@ -15,7 +16,8 @@ document.addEventListener('click', e => {
   const btn = e.target.closest('[data-theme-btn]');
   if (!btn) return;
   const theme = btn.dataset.themeBtn;
-  document.documentElement.dataset.theme = theme === 'flat' ? 'flat' : '';
+  const valid = ['flat', 'skeu'];
+  document.documentElement.dataset.theme = valid.includes(theme) ? theme : '';
   localStorage.setItem('gestor_theme', theme);
   syncThemeBtns(theme);
 });

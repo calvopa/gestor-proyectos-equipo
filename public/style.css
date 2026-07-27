@@ -139,6 +139,199 @@
   color: #fff;
 }
 
+/* ── Tema Skeuomorphism ── */
+[data-theme="skeu"] {
+  --bg:       #c9b99a;
+  --bg2:      #ddd0b8;
+  --bg3:      #bfaf97;
+  --border:   #9c8468;
+  --text:     #231a0e;
+  --text2:    #6b5235;
+  --accent:   #7b3f10;
+  --accent2:  #5c2d09;
+  --green:    #2d6a2d;
+  --yellow:   #a07800;
+  --red:      #8b1515;
+  --orange:   #b85c00;
+  --radius:   5px;
+  --shadow:   0 4px 10px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.25);
+}
+
+[data-theme="skeu"] body {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,.03) 2px,
+      rgba(0,0,0,.03) 4px
+    ),
+    linear-gradient(135deg, #c9b99a 0%, #b8a88a 100%);
+  background-attachment: fixed;
+}
+
+[data-theme="skeu"] nav {
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 3px,
+      rgba(0,0,0,.04) 3px,
+      rgba(0,0,0,.04) 6px
+    ),
+    linear-gradient(180deg, #3b2510 0%, #2a1a0a 100%);
+  border-right: 3px solid #1a0f05;
+  box-shadow: 4px 0 12px rgba(0,0,0,.5);
+}
+
+[data-theme="skeu"] nav .logo {
+  color: #e8c87a;
+  text-shadow: 0 1px 3px rgba(0,0,0,.6);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  padding-bottom: 20px;
+  margin-bottom: 4px;
+}
+
+[data-theme="skeu"] nav ul li a {
+  color: #b8976a;
+  border-left: 3px solid transparent;
+  transition: all .15s;
+}
+[data-theme="skeu"] nav ul li a:hover,
+[data-theme="skeu"] nav ul li a.active {
+  background: linear-gradient(90deg, rgba(255,255,255,.07), transparent);
+  color: #f0d89a;
+  border-left-color: #e8c87a;
+}
+
+[data-theme="skeu"] .sync-status { color: #b8976a; }
+[data-theme="skeu"] .sync-status .dot { background: #4caf50; box-shadow: 0 0 6px #4caf50; }
+
+[data-theme="skeu"] main {
+  background:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,.025) 2px,
+      rgba(0,0,0,.025) 4px
+    ),
+    linear-gradient(135deg, #c9b99a 0%, #b8a88a 100%);
+}
+
+[data-theme="skeu"] .card,
+[data-theme="skeu"] .dash-card,
+[data-theme="skeu"] .alert-card {
+  background: linear-gradient(180deg, #e8dac8 0%, #d4c4aa 100%);
+  border: 1px solid #9c8468;
+  border-top-color: #c8b898;
+  box-shadow: 0 3px 8px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.5);
+}
+
+[data-theme="skeu"] table {
+  border: 1px solid #9c8468;
+  box-shadow: 0 3px 10px rgba(0,0,0,.3);
+  background: #ddd0b8;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+[data-theme="skeu"] table thead th {
+  background: linear-gradient(180deg, #4a2e10 0%, #3a2008 100%);
+  color: #e8c87a;
+  border-bottom: 2px solid #1a0f05;
+  text-shadow: 0 1px 2px rgba(0,0,0,.5);
+  font-weight: 700;
+}
+
+[data-theme="skeu"] table tbody tr { background: rgba(255,255,255,.15); }
+[data-theme="skeu"] table tbody tr:nth-child(even) { background: rgba(0,0,0,.07); }
+[data-theme="skeu"] table tbody tr:hover { background: rgba(255,200,100,.2); }
+[data-theme="skeu"] table td, [data-theme="skeu"] table th {
+  border-color: rgba(0,0,0,.12);
+}
+
+[data-theme="skeu"] .btn {
+  background: linear-gradient(180deg, #e8dac8 0%, #c4b090 100%);
+  border: 1px solid #9c7a50;
+  border-bottom-color: #6b5030;
+  color: #3a2010;
+  box-shadow: 0 2px 4px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.5);
+  text-shadow: 0 1px 0 rgba(255,255,255,.4);
+  transition: all .1s;
+}
+[data-theme="skeu"] .btn:hover {
+  background: linear-gradient(180deg, #f0e4d0 0%, #d4c09a 100%);
+}
+[data-theme="skeu"] .btn:active {
+  background: linear-gradient(180deg, #b8a880 0%, #c8b890 100%);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,.3);
+  transform: translateY(1px);
+}
+
+[data-theme="skeu"] .btn-primary {
+  background: linear-gradient(180deg, #a05020 0%, #7b3510 100%);
+  border-color: #5c2008;
+  color: #f5e0c0;
+  text-shadow: 0 1px 2px rgba(0,0,0,.5);
+  box-shadow: 0 3px 6px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.2);
+}
+[data-theme="skeu"] .btn-primary:hover {
+  background: linear-gradient(180deg, #b06030 0%, #8b4520 100%);
+}
+
+[data-theme="skeu"] .btn-danger {
+  background: linear-gradient(180deg, #c04040 0%, #8b1515 100%);
+  border-color: #6b0f0f;
+  color: #ffe0e0;
+  text-shadow: 0 1px 2px rgba(0,0,0,.5);
+}
+
+[data-theme="skeu"] input,
+[data-theme="skeu"] select,
+[data-theme="skeu"] textarea {
+  background: linear-gradient(180deg, #c4b898 0%, #d4c8a8 100%);
+  border: 1px solid #9c8468;
+  border-top-color: #6b5440;
+  color: var(--text);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,.2);
+}
+[data-theme="skeu"] input:focus,
+[data-theme="skeu"] select:focus,
+[data-theme="skeu"] textarea:focus {
+  outline: none;
+  border-color: #7b3f10;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,.2), 0 0 0 2px rgba(123,63,16,.3);
+}
+
+[data-theme="skeu"] .modal-box {
+  background: linear-gradient(180deg, #e8dac8 0%, #d4c4aa 100%);
+  border: 2px solid #9c8468;
+  box-shadow: 0 20px 60px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.4);
+}
+
+[data-theme="skeu"] .tec-chip {
+  background: linear-gradient(180deg, #d4c4a0 0%, #b8a880 100%);
+  border: 1px solid #9c8468;
+  color: #3a2010;
+  box-shadow: 0 1px 3px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.4);
+}
+
+[data-theme="skeu"] .theme-switcher { border-top: 1px solid rgba(255,255,255,.08); }
+[data-theme="skeu"] .theme-btn {
+  border: 1px solid #1a0f05;
+  border-top-color: rgba(255,255,255,.1);
+  color: #b8976a;
+  background: linear-gradient(180deg, rgba(255,255,255,.07) 0%, transparent 100%);
+  box-shadow: 0 2px 4px rgba(0,0,0,.3), inset 0 1px 0 rgba(255,255,255,.08);
+}
+[data-theme="skeu"] .theme-btn.active {
+  background: linear-gradient(180deg, #a07040 0%, #7b5020 100%);
+  border-color: #3a1f08;
+  color: #f0d890;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,.4), 0 1px 0 rgba(255,255,255,.1);
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
