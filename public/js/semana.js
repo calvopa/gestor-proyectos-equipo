@@ -575,87 +575,141 @@ async function semanaExportSheets() {
 }
 
 // ── PDF Export ────────────────────────────────────────────
+function getPresentarTheme() {
+  const t = document.documentElement.dataset.theme;
+  if (t === 'flat') return {
+    bg: '#f0f2f5', cardBg: '#ffffff', cardBorder: '#d1d5db',
+    text: '#1a1d2e', text2: '#6b7280',
+    accent: '#6CAAD9', green: '#98D293', red: '#EB8398', orange: '#ea580c',
+    headerBg: '#2a3d52', headerText: '#ffffff', headerBorder: '#2a3d52',
+    sectionBorder: '#6CAAD9', sectionText: '#2a3d52',
+    evBorder: '#e2e8f0', evMeta: '#718096', evText: '#2d3748',
+    metricBg: '#ffffff', metricBorder: '#d1d5db', metricNum: '#2a3d52',
+    riskBg: '#fff0f3', riskBorder: '#fbc8d4', riskNum: '#EB8398',
+    okBg: '#f0fff4', okBorder: '#b8eabc', okNum: '#98D293',
+    aiBg: '#e8f4fb', aiBorder: '#6CAAD9', aiText: '#2a3d52',
+    warnBg: '#fefce8', warnText: '#92400e',
+    footerBorder: '#d1d5db', footerText: '#9ca3af',
+    printBtn: '#2a3d52',
+  };
+  if (t === 'skeu') return {
+    bg: '#EBEDF0', cardBg: '#EBEDF0', cardBorder: '#D1D5DB',
+    cardShadow: '-4px -4px 10px #FFFFFF, 4px 4px 10px #C8CDD6',
+    text: '#31344b', text2: '#6f7491',
+    accent: '#6CAAD9', green: '#98D293', red: '#EB8398', orange: '#e67e22',
+    headerBg: '#2a3d52', headerText: '#ffffff', headerBorder: '#2a3d52',
+    sectionBorder: '#6CAAD9', sectionText: '#2a3d52',
+    evBorder: '#D1D5DB', evMeta: '#6f7491', evText: '#31344b',
+    metricBg: '#EBEDF0', metricBorder: 'transparent',
+    metricShadow: '-4px -4px 8px #FFFFFF, 4px 4px 8px #D1D5DB', metricNum: '#31344b',
+    riskBg: '#EBEDF0', riskBorder: 'transparent',
+    riskShadow: '-4px -4px 8px #FFFFFF, 4px 4px 8px #D1D5DB', riskNum: '#EB8398',
+    okBg: '#EBEDF0', okBorder: 'transparent',
+    okShadow: '-4px -4px 8px #FFFFFF, 4px 4px 8px #D1D5DB', okNum: '#98D293',
+    aiBg: '#EBEDF0', aiBorder: '#6CAAD9', aiText: '#31344b',
+    warnBg: '#fefce8', warnText: '#92400e',
+    footerBorder: '#D1D5DB', footerText: '#9ba8b8',
+    printBtn: '#6CAAD9',
+  };
+  // Dark (default)
+  return {
+    bg: '#1a1d27', cardBg: '#242736', cardBorder: '#2e3148',
+    text: '#e2e4ef', text2: '#8b8fa8',
+    accent: '#6CAAD9', green: '#98D293', red: '#EB8398', orange: '#f97316',
+    headerBg: '#0f1117', headerText: '#6CAAD9', headerBorder: '#6CAAD9',
+    sectionBorder: '#6CAAD9', sectionText: '#6CAAD9',
+    evBorder: '#2e3148', evMeta: '#8b8fa8', evText: '#e2e4ef',
+    metricBg: '#242736', metricBorder: '#2e3148', metricNum: '#e2e4ef',
+    riskBg: '#2d1b22', riskBorder: '#4a2030', riskNum: '#EB8398',
+    okBg: '#1b2d20', okBorder: '#204a28', okNum: '#98D293',
+    aiBg: '#1a2535', aiBorder: '#6CAAD9', aiText: '#b8d4f0',
+    warnBg: '#2d2800', warnText: '#d4a820',
+    footerBorder: '#2e3148', footerText: '#6b7280',
+    printBtn: '#6CAAD9',
+  };
+}
+
 function semanaExportPDF() {
   const { data } = semanaState;
   if (!data) return;
 
-  const from    = data.week_start;
-  const range   = swFmtRange(from);
+  const c      = getPresentarTheme();
+  const from   = data.week_start;
+  const range  = swFmtRange(from);
   const withActivity = data.projects.filter(p => p.has_activity);
   const grouped = semanaGroup(withActivity, 'fase');
 
-  const PRIO_COLOR = { critica: '#c53030', alta: '#c05621', media: '#2b6cb0', baja: '#276749' };
-  const PRIO_BG    = { critica: '#fff5f5', alta: '#fffaf0', media: '#ebf8ff', baja: '#f0fff4' };
   const EV_ICON_PDF = { comment: '💬', status: '🔄', date: '📅', assignee: '·', other: '·' };
 
   function fmtSeg(seg) {
     if (!seg) return '';
-    const h = Math.floor(seg / 3600);
-    const m = Math.floor((seg % 3600) / 60);
+    const h = Math.floor(seg / 3600), m = Math.floor((seg % 3600) / 60);
     return h ? `${h}h ${m}m` : `${m}m`;
   }
 
   function prioBadge(p) {
     const label = { critica: 'CRÍTICA', alta: 'ALTA', media: 'MEDIA', baja: 'BAJA' }[p] || p;
-    const color = PRIO_COLOR[p] || '#2b6cb0';
-    const bg    = PRIO_BG[p]    || '#ebf8ff';
-    return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;letter-spacing:.6px;color:${color};background:${bg};border:1px solid ${color}33">${label}</span>`;
+    const colors = {
+      critica: { color: c.red,    bg: c.riskBg  },
+      alta:    { color: c.orange, bg: c.metricBg },
+      media:   { color: c.accent, bg: c.metricBg },
+      baja:    { color: c.green,  bg: c.okBg     },
+    };
+    const { color, bg } = colors[p] || { color: c.accent, bg: c.metricBg };
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700;letter-spacing:.6px;color:${color};background:${bg};border:1px solid ${color}44">${label}</span>`;
   }
 
   function saludLabel(s) {
     return { green: '🟢 Al día', yellow: '🟡 Con atención', red: '🔴 En riesgo', grey: '⚫ Sin datos', cerrado: '⚫ Cerrado', backlog: '⚫ Backlog' }[s] || s;
   }
 
-  // Métricas
   const { summary } = data;
 
-  // Secciones por fase (anonimizadas: sin nombres de técnicos)
   const seccionesHTML = grouped.map(group => {
     const cards = group.items.map(p => {
       const events = p.events.map(e => {
         const icon   = EV_ICON_PDF[e.event_type] || '·';
         const dayStr = swFmtDay(e.event_at);
-        // detail puede contener nombre de técnico en cambios de assignee → se omite si tipo es assignee
         const detail = e.event_type === 'assignee' ? '(cambio de asignación)' : (e.detail || '');
-        return `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid #edf2f7;font-size:11px;line-height:1.4">
-          <span style="color:#718096;white-space:nowrap;min-width:72px">${dayStr}</span>
+        return `<div style="display:flex;gap:8px;padding:5px 0;border-bottom:1px solid ${c.evBorder};font-size:11px;line-height:1.4">
+          <span style="color:${c.evMeta};white-space:nowrap;min-width:72px">${dayStr}</span>
           <span style="font-size:12px">${icon}</span>
-          <span style="color:#2d3748">${detail.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
+          <span style="color:${c.evText}">${detail.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span>
         </div>`;
       }).join('');
 
-      let faseChangeTxt = '';
-      if (p.fase_changed) {
-        faseChangeTxt = `<div style="margin-bottom:6px;font-size:11px;color:#744210;background:#fefcbf;border-radius:4px;padding:3px 8px;display:inline-block">
-          🔄 Cambio de fase: ${(p.fase_prev||'').replace(/</g,'&lt;')} → ${(p.clickup_status||'').replace(/</g,'&lt;')}
-        </div>`;
-      }
+      const faseChangeTxt = p.fase_changed
+        ? `<div style="margin-bottom:6px;font-size:11px;color:${c.warnText};background:${c.warnBg};border-radius:4px;padding:3px 8px;display:inline-block">
+            🔄 Cambio de fase: ${(p.fase_prev||'').replace(/</g,'&lt;')} → ${(p.clickup_status||'').replace(/</g,'&lt;')}
+          </div>` : '';
 
       let venceTxt = '';
       if (p.fecha_fin_est) {
         const dv = swDaysUntil(p.fecha_fin_est);
-        const alerta = dv < 0 ? `<span style="color:#c53030;font-weight:700">⚠️ Vencido hace ${Math.abs(dv)}d</span>`
-          : dv <= 5 ? `<span style="color:#c05621;font-weight:700">⚠️ Vence en ${dv}d</span>`
-          : `<span style="color:#276749">✅ Vence: ${p.fecha_fin_est}</span>`;
+        const alerta = dv < 0
+          ? `<span style="color:${c.red};font-weight:700">⚠️ Vencido hace ${Math.abs(dv)}d</span>`
+          : dv <= 5 ? `<span style="color:${c.orange};font-weight:700">⚠️ Vence en ${dv}d</span>`
+          : `<span style="color:${c.green}">✅ Vence: ${p.fecha_fin_est}</span>`;
         venceTxt = `<span style="font-size:11px">${alerta}</span>`;
       }
 
       const aiTxt = p.ai_summary
-        ? `<div style="margin-top:8px;padding:8px 10px;background:#ebf8ff;border-left:3px solid #2b6cb0;border-radius:4px;font-size:11px;color:#2c5282;line-height:1.5">✨ ${p.ai_summary.replace(/</g,'&lt;')}</div>`
+        ? `<div style="margin-top:8px;padding:8px 10px;background:${c.aiBg};border-left:3px solid ${c.aiBorder};border-radius:4px;font-size:11px;color:${c.aiText};line-height:1.5">✨ ${p.ai_summary.replace(/</g,'&lt;')}</div>`
         : '';
 
+      const cardShadow = c.cardShadow ? `box-shadow:${c.cardShadow};` : '';
       return `
-        <div style="page-break-inside:avoid;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin-bottom:12px;background:#fff">
+        <div style="page-break-inside:avoid;border:1px solid ${c.cardBorder};border-radius:8px;padding:14px 16px;margin-bottom:12px;background:${c.cardBg};${cardShadow}">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-            <div style="font-size:13px;font-weight:700;color:#1a365d;line-height:1.3">${p.nombre.replace(/</g,'&lt;')}</div>
+            <div style="font-size:13px;font-weight:700;color:${c.text};line-height:1.3">${p.nombre.replace(/</g,'&lt;')}</div>
             ${prioBadge(p.prioridad)}
           </div>
-          <div style="font-size:11px;color:#718096;margin-bottom:8px">${(p.clickup_status||'—').replace(/</g,'&lt;')} · ${saludLabel(p.salud)}</div>
+          <div style="font-size:11px;color:${c.text2};margin-bottom:8px">${(p.clickup_status||'—').replace(/</g,'&lt;')} · ${saludLabel(p.salud)}</div>
           ${faseChangeTxt}
-          <div style="font-size:11px;font-weight:600;color:#4a5568;margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">Esta semana · ${p.event_count} ${p.event_count === 1 ? 'update' : 'updates'}</div>
+          <div style="font-size:11px;font-weight:600;color:${c.text2};margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px">Esta semana · ${p.event_count} ${p.event_count === 1 ? 'update' : 'updates'}</div>
           ${events}
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;flex-wrap:wrap;gap:6px">
-            <span style="font-size:11px;color:#718096">
+            <span style="font-size:11px;color:${c.text2}">
               ${p.dias_inactivo !== null ? `${p.dias_inactivo}d sin actividad` : ''}
               ${p.seg_estimado_semana ? ` · ⏱ ~${swFmtHoras(p.seg_estimado_semana)} est.` : ''}
             </span>
@@ -667,13 +721,18 @@ function semanaExportPDF() {
 
     return `
       <div style="page-break-inside:avoid;margin-bottom:24px">
-        <div style="border-left:4px solid #2c5282;padding-left:10px;margin-bottom:10px">
-          <div style="font-size:12px;font-weight:700;color:#2c5282;text-transform:uppercase;letter-spacing:.6px">${group.label.replace(/</g,'&lt;')}</div>
-          <div style="font-size:11px;color:#718096">${group.items.length} proyecto${group.items.length !== 1 ? 's' : ''} con actividad</div>
+        <div style="border-left:4px solid ${c.sectionBorder};padding-left:10px;margin-bottom:10px">
+          <div style="font-size:12px;font-weight:700;color:${c.sectionText};text-transform:uppercase;letter-spacing:.6px">${group.label.replace(/</g,'&lt;')}</div>
+          <div style="font-size:11px;color:${c.text2}">${group.items.length} proyecto${group.items.length !== 1 ? 's' : ''} con actividad</div>
         </div>
         ${cards}
       </div>`;
   }).join('');
+
+  function metricCard(content, opts = {}) {
+    const shadow = opts.shadow ? `box-shadow:${opts.shadow};` : '';
+    return `<div style="flex:1;min-width:120px;background:${opts.bg||c.metricBg};border:1px solid ${opts.border||c.metricBorder};border-radius:8px;padding:12px 16px;text-align:center;${shadow}">${content}</div>`;
+  }
 
   const html = `<!DOCTYPE html>
 <html lang="es">
@@ -682,65 +741,59 @@ function semanaExportPDF() {
   <title>Avance Semanal — ${range}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, Helvetica, sans-serif; font-size: 13px; color: #2d3748; background: #fff; }
+    body { font-family: 'Arial', Helvetica, sans-serif; font-size: 13px; color: ${c.text}; background: ${c.bg}; padding: 24px; }
     @page { margin: 18mm 14mm; }
-    @media print {
-      body { font-size: 11px; }
-      .no-print { display: none !important; }
-    }
+    @media print { body { font-size: 11px; padding: 0; } .no-print { display: none !important; } }
   </style>
 </head>
 <body>
-  <!-- Botón imprimir (solo pantalla) -->
   <div class="no-print" style="position:fixed;top:14px;right:14px;z-index:999">
-    <button onclick="window.print()" style="background:#1a365d;color:#fff;border:none;border-radius:6px;padding:8px 18px;font-size:13px;cursor:pointer;font-family:Arial,sans-serif">
+    <button onclick="window.print()" style="background:${c.printBtn};color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;cursor:pointer;font-weight:600">
       🖨 Imprimir / Guardar PDF
     </button>
   </div>
 
   <!-- Encabezado -->
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid #1a365d;padding-bottom:12px;margin-bottom:18px">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;background:${c.headerBg};color:${c.headerText};border-radius:10px;padding:16px 20px;margin-bottom:20px">
     <div>
-      <div style="font-size:18px;font-weight:800;color:#1a365d;letter-spacing:-.3px">Avance Semanal de Proyectos</div>
-      <div style="font-size:12px;color:#718096;margin-top:3px">Reporte generado el ${new Date().toLocaleString('es-AR', { dateStyle:'long', timeStyle:'short' })}</div>
+      <div style="font-size:18px;font-weight:800;letter-spacing:-.3px">Avance Semanal de Proyectos</div>
+      <div style="font-size:12px;opacity:.7;margin-top:3px">Reporte generado el ${new Date().toLocaleString('es-AR', { dateStyle:'long', timeStyle:'short' })}</div>
     </div>
     <div style="text-align:right">
-      <div style="font-size:14px;font-weight:700;color:#2c5282">${range}</div>
-      <div style="font-size:11px;color:#718096;margin-top:2px">Vista por fase</div>
+      <div style="font-size:14px;font-weight:700">${range}</div>
+      <div style="font-size:11px;opacity:.7;margin-top:2px">Vista por fase</div>
     </div>
   </div>
 
   <!-- Métricas -->
   <div style="display:flex;gap:12px;margin-bottom:22px;flex-wrap:wrap">
-    <div style="flex:1;min-width:120px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;text-align:center">
-      <div style="font-size:22px;font-weight:800;color:#1a365d">${summary.with_activity}<span style="font-size:14px;color:#718096"> / ${summary.total}</span></div>
-      <div style="font-size:11px;color:#718096;margin-top:2px;text-transform:uppercase;letter-spacing:.4px">Con actividad</div>
-    </div>
-    <div style="flex:1;min-width:120px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;text-align:center">
-      <div style="font-size:22px;font-weight:800;color:#1a365d">${summary.total_events}</div>
-      <div style="font-size:11px;color:#718096;margin-top:2px;text-transform:uppercase;letter-spacing:.4px">Updates</div>
-    </div>
-    <div style="flex:1;min-width:120px;background:#f7fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px 16px;text-align:center">
-      <div style="font-size:22px;font-weight:800;color:#1a365d">${summary.phase_changes}</div>
-      <div style="font-size:11px;color:#718096;margin-top:2px;text-transform:uppercase;letter-spacing:.4px">Cambios de fase</div>
-    </div>
-    ${summary.entered_risk > 0 ? `
-    <div style="flex:1;min-width:120px;background:#fff5f5;border:1px solid #fed7d7;border-radius:6px;padding:12px 16px;text-align:center">
-      <div style="font-size:22px;font-weight:800;color:#c53030">+${summary.entered_risk}</div>
-      <div style="font-size:11px;color:#c53030;margin-top:2px;text-transform:uppercase;letter-spacing:.4px">→ En riesgo</div>
-    </div>` : ''}
-    ${summary.left_risk > 0 ? `
-    <div style="flex:1;min-width:120px;background:#f0fff4;border:1px solid #c6f6d5;border-radius:6px;padding:12px 16px;text-align:center">
-      <div style="font-size:22px;font-weight:800;color:#276749">${summary.left_risk}</div>
-      <div style="font-size:11px;color:#276749;margin-top:2px;text-transform:uppercase;letter-spacing:.4px">Salieron de riesgo</div>
-    </div>` : ''}
+    ${metricCard(`
+      <div style="font-size:22px;font-weight:800;color:${c.accent}">${summary.with_activity}<span style="font-size:14px;color:${c.text2}"> / ${summary.total}</span></div>
+      <div style="font-size:11px;color:${c.text2};margin-top:2px;text-transform:uppercase;letter-spacing:.4px">Con actividad</div>
+    `)}
+    ${metricCard(`
+      <div style="font-size:22px;font-weight:800;color:${c.metricNum}">${summary.total_events}</div>
+      <div style="font-size:11px;color:${c.text2};margin-top:2px;text-transform:uppercase;letter-spacing:.4px">Updates</div>
+    `)}
+    ${metricCard(`
+      <div style="font-size:22px;font-weight:800;color:${c.metricNum}">${summary.phase_changes}</div>
+      <div style="font-size:11px;color:${c.text2};margin-top:2px;text-transform:uppercase;letter-spacing:.4px">Cambios de fase</div>
+    `)}
+    ${summary.entered_risk > 0 ? metricCard(`
+      <div style="font-size:22px;font-weight:800;color:${c.riskNum}">+${summary.entered_risk}</div>
+      <div style="font-size:11px;color:${c.riskNum};margin-top:2px;text-transform:uppercase;letter-spacing:.4px">→ En riesgo</div>
+    `, { bg: c.riskBg, border: c.riskBorder, shadow: c.riskShadow }) : ''}
+    ${summary.left_risk > 0 ? metricCard(`
+      <div style="font-size:22px;font-weight:800;color:${c.okNum}">${summary.left_risk}</div>
+      <div style="font-size:11px;color:${c.okNum};margin-top:2px;text-transform:uppercase;letter-spacing:.4px">Salieron de riesgo</div>
+    `, { bg: c.okBg, border: c.okBorder, shadow: c.okShadow }) : ''}
   </div>
 
-  <!-- Proyectos agrupados por fase -->
-  ${seccionesHTML || '<p style="color:#718096;text-align:center;padding:40px">Sin proyectos con actividad esta semana.</p>'}
+  <!-- Proyectos -->
+  ${seccionesHTML || `<p style="color:${c.text2};text-align:center;padding:40px">Sin proyectos con actividad esta semana.</p>`}
 
   <!-- Pie -->
-  <div style="margin-top:24px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:10px;color:#a0aec0;text-align:center">
+  <div style="margin-top:24px;padding-top:10px;border-top:1px solid ${c.footerBorder};font-size:10px;color:${c.footerText};text-align:center">
     Reporte anonimizado · Gestor de Proyectos GCS · ${new Date().getFullYear()}
   </div>
 </body>
