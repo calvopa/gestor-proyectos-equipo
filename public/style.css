@@ -5,11 +5,11 @@
   --border:   #2e3148;
   --text:     #e2e4ef;
   --text2:    #8b8fa8;
-  --accent:   #6c63ff;
-  --accent2:  #4e46cc;
-  --green:    #22c55e;
+  --accent:   #6CAAD9;
+  --accent2:  #5090bf;
+  --green:    #98D293;
   --yellow:   #eab308;
-  --red:      #ef4444;
+  --red:      #EB8398;
   --orange:   #f97316;
   --radius:   8px;
   --shadow:   0 2px 12px rgba(0,0,0,.4);
@@ -23,11 +23,11 @@
   --border:   #d1d5db;
   --text:     #1a1d2e;
   --text2:    #6b7280;
-  --accent:   #2563eb;
-  --accent2:  #1d4ed8;
-  --green:    #16a34a;
+  --accent:   #6CAAD9;
+  --accent2:  #5090bf;
+  --green:    #98D293;
   --yellow:   #ca8a04;
-  --red:      #dc2626;
+  --red:      #EB8398;
   --orange:   #ea580c;
   --radius:   6px;
   --shadow:   none;
@@ -38,7 +38,7 @@
 }
 
 [data-theme="flat"] nav {
-  background: #1e293b;
+  background: #2a3d52;
   border-right: none;
 }
 
@@ -49,7 +49,7 @@
 }
 [data-theme="flat"] nav ul li a:hover,
 [data-theme="flat"] nav ul li a.active {
-  background: #334155;
+  background: rgba(108,170,217,.2);
   color: #ffffff;
 }
 
@@ -65,7 +65,7 @@
 }
 
 [data-theme="flat"] table thead th {
-  background: #1e293b;
+  background: #2a3d52;
   color: #ffffff;
   border-bottom: none;
 }
@@ -77,8 +77,9 @@
 }
 
 [data-theme="flat"] .btn-primary {
-  background: var(--accent);
+  background: #6CAAD9;
   border: none;
+  color: #fff;
 }
 
 [data-theme="flat"] .badge,
@@ -134,8 +135,8 @@
   color: #94a3b8;
 }
 [data-theme="flat"] .theme-btn.active {
-  background: #2563eb;
-  border-color: #2563eb;
+  background: #6CAAD9;
+  border-color: #6CAAD9;
   color: #fff;
 }
 
@@ -147,11 +148,11 @@
   --border:   transparent;
   --text:     #31344b;
   --text2:    #6f7491;
-  --accent:   #6c63ff;
-  --accent2:  #5a52e0;
-  --green:    #27ae60;
+  --accent:   #6CAAD9;
+  --accent2:  #5090bf;
+  --green:    #98D293;
   --yellow:   #f39c12;
-  --red:      #e74c3c;
+  --red:      #EB8398;
   --orange:   #e67e22;
   --radius:   12px;
   --shadow:   -6px -6px 12px #FFFFFF, 6px 6px 12px #D1D5DB;
@@ -162,25 +163,25 @@
 }
 
 [data-theme="skeu"] nav {
-  background: #2d3561;
+  background: #2a3d52;
   border-right: none;
   box-shadow: 6px 0 20px rgba(0,0,0,.2);
 }
 
 [data-theme="skeu"] nav .logo {
-  color: #a8b2ff;
+  color: #6CAAD9;
   font-weight: 800;
 }
 
 [data-theme="skeu"] nav ul li a {
-  color: #7b84c4;
+  color: #7aa8c8;
   border-radius: 10px;
   margin: 2px 10px;
 }
 [data-theme="skeu"] nav ul li a:hover,
 [data-theme="skeu"] nav ul li a.active {
-  background: rgba(108,99,255,.2);
-  color: #c4caff;
+  background: rgba(108,170,217,.18);
+  color: #b8d8f0;
 }
 
 [data-theme="skeu"] .sync-status { color: #7b84c4; }
@@ -241,22 +242,22 @@
 }
 
 [data-theme="skeu"] .btn-primary {
-  background: #6c63ff;
+  background: #6CAAD9;
   color: #fff;
-  box-shadow: -4px -4px 8px rgba(108,99,255,.3), 4px 4px 8px rgba(0,0,0,.25);
+  box-shadow: -4px -4px 8px rgba(108,170,217,.35), 4px 4px 8px rgba(0,0,0,.2);
 }
 [data-theme="skeu"] .btn-primary:hover {
-  background: #5a52e0;
-  box-shadow: -5px -5px 10px rgba(108,99,255,.35), 5px 5px 10px rgba(0,0,0,.3);
+  background: #5090bf;
+  box-shadow: -5px -5px 10px rgba(108,170,217,.4), 5px 5px 10px rgba(0,0,0,.25);
 }
 [data-theme="skeu"] .btn-primary:active {
-  box-shadow: inset -3px -3px 6px rgba(255,255,255,.2), inset 3px 3px 6px rgba(0,0,0,.3);
+  box-shadow: inset -3px -3px 6px rgba(255,255,255,.25), inset 3px 3px 6px rgba(0,0,0,.25);
 }
 
 [data-theme="skeu"] .btn-danger {
-  background: #e74c3c;
+  background: #EB8398;
   color: #fff;
-  box-shadow: -4px -4px 8px rgba(231,76,60,.25), 4px 4px 8px rgba(0,0,0,.2);
+  box-shadow: -4px -4px 8px rgba(235,131,152,.3), 4px 4px 8px rgba(0,0,0,.2);
 }
 
 [data-theme="skeu"] .btn-ghost {
@@ -306,10 +307,10 @@
   box-shadow: none;
 }
 [data-theme="skeu"] .theme-btn.active {
-  background: #6c63ff;
-  border-color: #6c63ff;
+  background: #6CAAD9;
+  border-color: #6CAAD9;
   color: #fff;
-  box-shadow: 0 2px 8px rgba(108,99,255,.5);
+  box-shadow: 0 2px 8px rgba(108,170,217,.5);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
