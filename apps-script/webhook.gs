@@ -108,7 +108,8 @@ function exportProjects(data) {
   // Encabezado
   const headers = [
     'Nombre', 'Estado', 'Prioridad', 'Fase (ClickUp)', 'Técnicos',
-    'Fecha inicio', 'Vence', 'Último comentario (fecha)', 'Por', 'Último comentario (texto)', 'Resumen IA',
+    'Fecha inicio', 'Vence', 'Horas reg.', 'Horas est.',
+    'Último comentario (fecha)', 'Por', 'Último comentario (texto)', 'Resumen IA',
   ];
   sheet.appendRow(headers);
   styleHeaderRow(sheet, headers.length);
@@ -123,6 +124,8 @@ function exportProjects(data) {
     p.tecnicos || '',
     p.fecha_inicio || '',
     p.fecha_fin_est || '',
+    p.seg_total ? Math.round((p.seg_total / 3600) * 10) / 10 : '',
+    p.seg_estimado ? Math.round((p.seg_estimado / 3600) * 10) / 10 : '',
     p.last_comment_at ? p.last_comment_at.slice(0, 10) : '',
     p.last_comment_by || '',
     (p.last_comment_text || '').slice(0, 500),

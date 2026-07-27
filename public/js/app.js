@@ -582,13 +582,25 @@ async function projectsExportSheets(projects) {
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Exportando...'; }
 
   try {
+    // Enriquecer con horas reales
+    let horasByProject = {};
+    try {
+      const { byProject } = await api.getTotals();
+      byProject.forEach(r => { horasByProject[r.id] = r; });
+    } catch (_) {}
+
+    const enriched = projects.map(p => {
+      const h = horasByProject[p.id];
+      return { ...p, seg_total: h?.seg_total ?? 0, seg_estimado: h?.seg_estimado ?? 0 };
+    });
+
     const result = await api._fetch('/api/export/sheets', {
       method: 'POST',
       body: {
         type: 'projects',
         exported_at: new Date().toISOString(),
-        total: projects.length,
-        projects,
+        total: enriched.length,
+        projects: enriched,
       },
     });
     if (result.ok) {
