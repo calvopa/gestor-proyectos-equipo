@@ -1505,35 +1505,102 @@ async function renderCarga() {
   const main = document.getElementById('main-content');
   const resources = await api.getCarga();
 
+  function avatarColor(name) {
+    const palette = ['#6CAAD9','#98D293','#EB8398','#a78bfa','#f97316','#22d3ee','#fbbf24','#e879f9'];
+    let h = 0;
+    for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffff;
+    return palette[h % palette.length];
+  }
+
+  function initials(name) {
+    return name.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  }
+
+  function cargaTag(assignments) {
+    const n = assignments.filter(a => a.project_estado === 'en_curso').length;
+    if (n === 0) return { label: 'Sin carga',   cls: 'carga-tag-none' };
+    if (n <= 2)  return { label: 'Normal',       cls: 'carga-tag-ok'   };
+    if (n <= 3)  return { label: 'Ocupado',      cls: 'carga-tag-mid'  };
+    return            { label: 'Sobrecarga',  cls: 'carga-tag-high' };
+  }
+
+  const totalHoras = resources.reduce((s, r) => s + (r.hours?.seg_contados || 0), 0);
+
   main.innerHTML = `
-    <div class="page-header"><h1>Carga por recurso</h1></div>
-    ${resources.length === 0 ? '<div class="empty"><div class="empty-icon">📊</div><p>Sin recursos activos</p></div>' :
-      resources.map(r => `
-        <div class="resource-card">
-          <div class="rc-header">
-            <div>
-              <div class="rc-name">${escHtml(r.nombre)}</div>
-              <div class="rc-meta">${escHtml(r.rol||'')} ${r.email ? '· ' + escHtml(r.email) : ''}</div>
-            </div>
-            <div style="text-align:right">
-              <div style="font-size:18px;font-weight:700">${fmtSec(r.hours?.seg_contados)}</div>
-              <div style="font-size:12px;color:var(--text2)">contabilizadas</div>
-              ${r.hours?.seg_total !== r.hours?.seg_contados ? `<div style="font-size:12px;color:var(--orange)">${fmtSec(r.hours?.seg_total)} total registrado</div>` : ''}
-            </div>
-          </div>
-          <div style="font-size:12px;color:var(--text2);margin-bottom:6px">${r.assignments.length} proyecto${r.assignments.length !== 1 ? 's' : ''}</div>
-          <div class="rc-projects">
-            ${r.assignments.map(a => `
-              <span style="display:inline-flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:12px">
-                ${badgeEstado(a.project_estado)}
-                ${escHtml(a.project_nombre)}
-                ${a.dedicacion_pct ? `<span style="color:var(--text2)">${a.dedicacion_pct}%</span>` : ''}
-              </span>
-            `).join('')}
-          </div>
-        </div>
-      `).join('')}
+    <div class="page-header">
+      <h1>Carga por recurso <span class="page-count">${resources.length}</span></h1>
+    </div>
+
+    ${resources.length === 0
+      ? '<div class="empty"><div class="empty-icon">📊</div><p>Sin recursos activos</p></div>'
+      : `<div class="carga-grid">
+          ${resources.map(r => {
+            const color = avatarColor(r.nombre);
+            const tag   = cargaTag(r.assignments);
+            const activos = r.assignments.filter(a => a.project_estado === 'en_curso').length;
+            const horas = r.hours?.seg_contados || 0;
+            const pctHoras = totalHoras ? Math.round((horas / totalHoras) * 100) : 0;
+
+            const proyectos = r.assignments.slice().sort((a, b) => {
+              const order = { en_curso: 0, pausado: 1, backlog: 2, cerrado: 3 };
+              return (order[a.project_estado] ?? 9) - (order[b.project_estado] ?? 9);
+            });
+
+            return `
+              <div class="carga-card">
+                <div class="carga-card-header">
+                  <div class="carga-avatar" style="background:${color}">${escHtml(initials(r.nombre))}</div>
+                  <div class="carga-info">
+                    <div class="carga-nombre">${escHtml(r.nombre)}</div>
+                    <div class="carga-rol">${escHtml(r.rol || 'Sin rol')}${r.email ? ` · ${escHtml(r.email)}` : ''}</div>
+                  </div>
+                  <span class="carga-tag ${tag.cls}">${tag.label}</span>
+                </div>
+
+                <div class="carga-stats">
+                  <div class="carga-stat">
+                    <span class="carga-stat-val">${r.assignments.length}</span>
+                    <span class="carga-stat-lbl">proyectos</span>
+                  </div>
+                  <div class="carga-stat">
+                    <span class="carga-stat-val" style="color:var(--accent)">${activos}</span>
+                    <span class="carga-stat-lbl">en curso</span>
+                  </div>
+                  <div class="carga-stat">
+                    <span class="carga-stat-val">${fmtSec(horas)}</span>
+                    <span class="carga-stat-lbl">horas</span>
+                  </div>
+                </div>
+
+                ${totalHoras ? `
+                <div class="carga-bar-wrap" title="${pctHoras}% del total de horas del equipo">
+                  <div class="carga-bar-fill" style="width:${pctHoras}%;background:${color}"></div>
+                </div>` : ''}
+
+                ${proyectos.length === 0
+                  ? `<p class="carga-empty">Sin proyectos asignados</p>`
+                  : `<div class="carga-project-list">
+                      ${proyectos.map(a => `
+                        <div class="carga-project-row" data-pid="${a.project_id}">
+                          <span class="semaforo semaforo-${a.project_estado === 'en_curso' ? 'green' : a.project_estado === 'pausado' ? 'yellow' : 'grey'}"></span>
+                          <span class="carga-project-name">${escHtml(a.project_nombre)}</span>
+                          <span class="carga-project-right">
+                            ${badgeEstado(a.project_estado)}
+                            ${a.dedicacion_pct ? `<span class="carga-pct">${a.dedicacion_pct}%</span>` : ''}
+                          </span>
+                        </div>
+                      `).join('')}
+                    </div>`}
+              </div>
+            `;
+          }).join('')}
+        </div>`
+    }
   `;
+
+  main.querySelectorAll('.carga-project-row[data-pid]').forEach(row =>
+    row.addEventListener('click', () => navigate('project-detail', { id: row.dataset.pid }))
+  );
 }
 
 // ── ⑥ Settings ────────────────────────────────────────────
