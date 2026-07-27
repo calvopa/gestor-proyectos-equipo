@@ -13,6 +13,15 @@
   --orange:   #f97316;
   --radius:   8px;
   --shadow:   0 2px 12px rgba(0,0,0,.4);
+  /* Presentación */
+  --pres-bg:       #07090e;
+  --pres-border:   #1e2130;
+  --pres-card-bg:  #0f1117;
+  --pres-text:     #e2e4ef;
+  --pres-text2:    #6b7194;
+  --pres-ev-text:  #c8cad8;
+  --pres-btn-bg:   #1a1d27;
+  --pres-dot:      #2e3148;
 }
 
 /* ── Tema Flat (claro) ── */
@@ -31,6 +40,14 @@
   --orange:   #ea580c;
   --radius:   6px;
   --shadow:   none;
+  --pres-bg:       #f0f2f5;
+  --pres-border:   #d1d5db;
+  --pres-card-bg:  #ffffff;
+  --pres-text:     #1a1d2e;
+  --pres-text2:    #6b7280;
+  --pres-ev-text:  #374151;
+  --pres-btn-bg:   #e4e7ed;
+  --pres-dot:      #d1d5db;
 }
 
 [data-theme="flat"] body {
@@ -155,6 +172,14 @@
   --red:      #EB8398;
   --orange:   #e67e22;
   --radius:   12px;
+  --pres-bg:       #EBEDF0;
+  --pres-border:   #D1D5DB;
+  --pres-card-bg:  #EBEDF0;
+  --pres-text:     #31344b;
+  --pres-text2:    #6f7491;
+  --pres-ev-text:  #31344b;
+  --pres-btn-bg:   #DDE1E7;
+  --pres-dot:      #C8CDD6;
   --shadow:   -6px -6px 12px #FFFFFF, 6px 6px 12px #D1D5DB;
 }
 
@@ -1431,7 +1456,7 @@ tr.fila-yellow:hover td { background: rgba(234,179,8,.09); }
 .sem-pres-overlay {
   position: fixed;
   inset: 0;
-  background: #07090e;
+  background: var(--pres-bg);
   z-index: 9999;
   display: flex;
   flex-direction: column;
@@ -1443,22 +1468,22 @@ tr.fila-yellow:hover td { background: rgba(234,179,8,.09); }
   align-items: center;
   justify-content: space-between;
   padding: 14px 28px;
-  border-bottom: 1px solid #1e2130;
+  border-bottom: 1px solid var(--pres-border);
   flex-shrink: 0;
 }
 .sem-pres-esc {
   background: transparent;
-  border: 1px solid #2e3148;
-  color: #6b7194;
+  border: 1px solid var(--pres-border);
+  color: var(--pres-text2);
   padding: 6px 14px;
   border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
   font-family: inherit;
 }
-.sem-pres-esc:hover { background: #1a1d27; }
-.sem-pres-range  { font-size: 14px; color: #6b7194; }
-.sem-pres-counter { font-size: 13px; color: #6b7194; }
+.sem-pres-esc:hover { background: var(--pres-btn-bg); }
+.sem-pres-range   { font-size: 14px; color: var(--pres-text2); }
+.sem-pres-counter { font-size: 13px; color: var(--pres-text2); }
 
 .sem-pres-body {
   flex: 1;
@@ -1486,7 +1511,7 @@ tr.fila-yellow:hover td { background: rgba(234,179,8,.09); }
 .sem-pres-name {
   font-size: 36px;
   font-weight: 800;
-  color: #e2e4ef;
+  color: var(--pres-text);
   line-height: 1.2;
 }
 .sem-pres-prio .badge { font-size: 14px; padding: 5px 12px; }
@@ -1497,21 +1522,21 @@ tr.fila-yellow:hover td { background: rgba(234,179,8,.09); }
   gap: 20px;
   flex-wrap: wrap;
 }
-.sem-pres-fase { font-size: 18px; color: #8b8fa8; }
-.sem-pres-tec  { font-size: 18px; color: #8b8fa8; }
+.sem-pres-fase { font-size: 18px; color: var(--pres-text2); }
+.sem-pres-tec  { font-size: 18px; color: var(--pres-text2); }
 
 .sem-pres-fase-change {
   font-size: 15px;
-  color: #6c63ff;
-  background: rgba(108,99,255,.15);
+  color: var(--accent);
+  background: rgba(108,170,217,.12);
   padding: 6px 14px;
   border-radius: 6px;
   display: inline-block;
 }
 
 .sem-pres-events-wrap {
-  background: #0f1117;
-  border: 1px solid #1e2130;
+  background: var(--pres-card-bg);
+  border: 1px solid var(--pres-border);
   border-radius: 10px;
   padding: 20px 24px;
 }
@@ -1520,7 +1545,7 @@ tr.fila-yellow:hover td { background: rgba(234,179,8,.09); }
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: .5px;
-  color: #6c63ff;
+  color: var(--accent);
   margin-bottom: 14px;
 }
 .sem-pres-events { display: flex; flex-direction: column; gap: 12px; }
@@ -1531,9 +1556,9 @@ tr.fila-yellow:hover td { background: rgba(234,179,8,.09); }
   align-items: start;
   gap: 8px;
 }
-.sem-pres-ev-day  { font-size: 14px; color: #6b7194; padding-top: 2px; }
+.sem-pres-ev-day  { font-size: 14px; color: var(--pres-text2); padding-top: 2px; }
 .sem-pres-ev-icon { font-size: 18px; text-align: center; }
-.sem-pres-ev-text { font-size: 17px; color: #c8cad8; line-height: 1.5; }
+.sem-pres-ev-text { font-size: 17px; color: var(--pres-ev-text); line-height: 1.5; }
 
 .sem-pres-bottom {
   display: flex;
@@ -1547,31 +1572,54 @@ tr.fila-yellow:hover td { background: rgba(234,179,8,.09); }
   border-radius: 6px;
   display: inline-block;
 }
-.sem-pres-dias  { font-size: 15px; color: #6b7194; }
-.sem-pres-vence { font-size: 15px; color: #6b7194; }
+.sem-pres-dias  { font-size: 15px; color: var(--pres-text2); }
+.sem-pres-vence { font-size: 15px; color: var(--pres-text2); }
 
 .sem-pres-ai {
   font-size: 16px;
-  color: #8b8fa8;
-  background: rgba(108,99,255,.08);
+  color: var(--pres-text2);
+  background: rgba(108,170,217,.08);
+  border: 1px solid rgba(108,170,217,.2);
   border-radius: 8px;
   padding: 14px 18px;
   line-height: 1.7;
   white-space: pre-line;
 }
 
+.sem-pres-ai-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.sem-pres-ai-btn {
+  background: rgba(108,170,217,.12);
+  border: 1px solid rgba(108,170,217,.3);
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 10px 22px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background .15s;
+}
+.sem-pres-ai-btn:hover { background: rgba(108,170,217,.22); }
+.sem-pres-ai-btn:disabled { opacity: .5; cursor: default; }
+
 .sem-pres-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 16px 48px;
-  border-top: 1px solid #1e2130;
+  border-top: 1px solid var(--pres-border);
   flex-shrink: 0;
 }
 .sem-pres-arrow {
   background: transparent;
-  border: 1px solid #2e3148;
-  color: #e2e4ef;
+  border: 1px solid var(--pres-border);
+  color: var(--pres-text);
   font-size: 28px;
   padding: 8px 22px;
   border-radius: 8px;
@@ -1579,16 +1627,16 @@ tr.fila-yellow:hover td { background: rgba(234,179,8,.09); }
   font-family: inherit;
   transition: background .15s;
 }
-.sem-pres-arrow:hover:not(:disabled) { background: #1a1d27; }
+.sem-pres-arrow:hover:not(:disabled) { background: var(--pres-btn-bg); }
 .sem-pres-arrow:disabled { opacity: .3; cursor: default; }
 .sem-pres-dots { display: flex; gap: 8px; align-items: center; }
 .sem-pres-dot {
   width: 8px; height: 8px;
   border-radius: 50%;
-  background: #2e3148;
+  background: var(--pres-dot);
   transition: background .2s;
 }
-.sem-pres-dot.active { background: #6c63ff; width: 20px; border-radius: 4px; }
+.sem-pres-dot.active { background: var(--accent); width: 20px; border-radius: 4px; }
 
 /* ── Resumen Horas ── */
 /* ── Duration presets ── */

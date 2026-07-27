@@ -455,6 +455,31 @@ function semanaPresentDraw(overlay, data) {
 
   document.getElementById('sem-pres-close').addEventListener('click', () =>
     semanaExitPresentation(overlay));
+
+  // Botón IA en presentación
+  const aiBtn = overlay.querySelector('.sem-pres-ai-btn');
+  if (aiBtn) {
+    aiBtn.addEventListener('click', async () => {
+      const pid = aiBtn.dataset.pid;
+      aiBtn.disabled = true;
+      aiBtn.textContent = '⏳ Generando…';
+      try {
+        const r = await api.getSemanaAiSummary(pid, data.week_start);
+        const box = document.getElementById(`pres-ai-box-${pid}`);
+        if (box) {
+          box.className = 'sem-pres-ai';
+          box.textContent = r.summary;
+        }
+        const proj = semanaState.data.projects.find(p => String(p.id) === String(pid));
+        if (proj) proj.ai_summary = r.summary;
+      } catch (e) {
+        aiBtn.disabled = false;
+        aiBtn.textContent = '✨ Resumir con IA';
+        toast(e.message, 'error');
+      }
+    });
+  }
+
   document.getElementById('sem-pres-prev').addEventListener('click', () => {
     if (semanaState.presentIdx > 0) { semanaState.presentIdx--; semanaPresentDraw(overlay, data); }
   });
@@ -498,8 +523,10 @@ function semanaPresentCardHtml(p, weekStart) {
     : '';
 
   const aiTxt = p.ai_summary
-    ? `<div class="sem-pres-ai">${escHtml(p.ai_summary)}</div>`
-    : '';
+    ? `<div class="sem-pres-ai" id="pres-ai-box-${p.id}">${escHtml(p.ai_summary)}</div>`
+    : `<div class="sem-pres-ai-box" id="pres-ai-box-${p.id}">
+         <button class="sem-pres-ai-btn" data-pid="${p.id}">✨ Resumir con IA</button>
+       </div>`;
 
   let diasInfo = '';
   if (p.dias_inactivo_prev !== null && p.dias_inactivo !== null) {
