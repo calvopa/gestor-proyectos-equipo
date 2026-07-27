@@ -129,8 +129,8 @@ router.get('/resumen-horas', (req, res) => {
 
 // POST /api/projects/:id/ai-summary
 router.post('/:id/ai-summary', async (req, res) => {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) return res.status(503).json({ error: 'ANTHROPIC_API_KEY no configurado en el servidor' });
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) return res.status(503).json({ error: 'GEMINI_API_KEY no configurado en el servidor' });
 
   try {
     const db = getDb();
@@ -182,23 +182,21 @@ ${context}
 Actividad reciente (más reciente primero):
 ${lines}`;
 
-    const apiRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 300,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
+    const apiRes = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { maxOutputTokens: 300 },
+        }),
+      }
+    );
 
     const data = await apiRes.json();
-    if (!apiRes.ok) throw new Error(data.error?.message || `Anthropic API ${apiRes.status}`);
-    const summary = data.content?.[0]?.text?.trim() || 'No se pudo generar resumen.';
+    if (!apiRes.ok) throw new Error(data.error?.message || `Gemini API ${apiRes.status}`);
+    const summary = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'No se pudo generar resumen.';
 
     res.json({ summary });
   } catch (err) {
