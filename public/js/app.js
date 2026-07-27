@@ -901,6 +901,20 @@ async function renderKanban() {
     const alerta = (salud.level === 'red' || salud.level === 'yellow')
       ? `<span class="kanban-salud kanban-salud-${salud.level}">${escHtml(salud.titulo)}</span>` : '';
     const tecs = p.tecnicos ? p.tecnicos.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+    let fechaHtml = '';
+    if (p.fecha_fin_est) {
+      const hoy   = Date.now();
+      const fecha = new Date(p.fecha_fin_est);
+      const dias  = Math.floor((fecha - hoy) / 86400000);
+      const vencido    = dias < 0;
+      const proxVence  = !vencido && dias <= 5;
+      const [, mm, dd] = p.fecha_fin_est.split('-');
+      const label = `${dd}/${mm}`;
+      const cls   = vencido ? 'kanban-fecha-red' : proxVence ? 'kanban-fecha-yellow' : 'kanban-fecha';
+      fechaHtml = `<span class="${cls}" title="Vence ${p.fecha_fin_est}">📅 ${label}</span>`;
+    }
+
     return `
       <div class="kanban-card" draggable="true" data-id="${p.id}" data-estado="${escHtml(p.estado)}">
         <div class="kanban-card-title">
@@ -909,6 +923,7 @@ async function renderKanban() {
         </div>
         <div class="kanban-card-meta">
           ${badgePrio(p.prioridad)}
+          ${fechaHtml}
           ${alerta}
           ${!p.cuenta_horas ? '<span class="no-cuenta-badge">sin cómputo</span>' : ''}
         </div>
