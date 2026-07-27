@@ -46,7 +46,7 @@ function exportSemana(data) {
   // Encabezado
   const headers = [
     'Nombre', 'Fase', 'Técnicos', 'Salud', 'Con actividad',
-    'Eventos semana', 'Movimiento', 'Días inactivo', 'Vence', 'Estimado (h)',
+    'Eventos semana', 'Movimiento', 'Días inactivo', 'Vence', 'Estimado (h)', 'Resumen IA',
   ];
   sheet.appendRow(headers);
   styleHeaderRow(sheet, headers.length);
@@ -64,6 +64,7 @@ function exportSemana(data) {
     p.dias_inactivo !== null && p.dias_inactivo !== undefined ? p.dias_inactivo : '',
     p.fecha_fin_est || '',
     p.seg_estimado_semana ? Math.round((p.seg_estimado_semana / 3600) * 10) / 10 : '',
+    p.ai_summary || '',
   ]);
 
   if (rows.length) {
@@ -107,7 +108,7 @@ function exportProjects(data) {
   // Encabezado
   const headers = [
     'Nombre', 'Estado', 'Prioridad', 'Fase (ClickUp)', 'Técnicos',
-    'Fecha inicio', 'Vence', 'Último comentario (fecha)', 'Por', 'Último comentario (texto)',
+    'Fecha inicio', 'Vence', 'Último comentario (fecha)', 'Por', 'Último comentario (texto)', 'Resumen IA',
   ];
   sheet.appendRow(headers);
   styleHeaderRow(sheet, headers.length);
@@ -125,6 +126,7 @@ function exportProjects(data) {
     p.last_comment_at ? p.last_comment_at.slice(0, 10) : '',
     p.last_comment_by || '',
     (p.last_comment_text || '').slice(0, 500),
+    p.ai_summary || '',
   ]);
 
   if (rows.length) {

@@ -22,7 +22,8 @@ router.get('/', (req, res) => {
 
   let sql = `
     SELECT p.*,
-      GROUP_CONCAT(DISTINCT r.nombre) as tecnicos
+      GROUP_CONCAT(DISTINCT r.nombre) as tecnicos,
+      (SELECT ai_summary FROM weekly_snapshots WHERE project_id=p.id AND ai_summary IS NOT NULL ORDER BY week_start DESC LIMIT 1) as ai_summary
     FROM projects p
     LEFT JOIN assignments a ON a.project_id = p.id
     LEFT JOIN resources r ON r.id = a.resource_id
