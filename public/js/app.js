@@ -1501,6 +1501,62 @@ async function showResourceModal(id = null) {
 }
 
 // ── ⑤ Carga por recurso ───────────────────────────────────
+function showResourceModal(resource, onSave) {
+  const isEdit = !!resource;
+  const r = resource || {};
+  const overlay = el(`
+    <div class="modal-overlay">
+      <div class="modal" style="max-width:380px">
+        <h2>${isEdit ? 'Editar recurso' : 'Nuevo recurso'}</h2>
+        <div class="form-group"><label>Nombre *</label><input type="text" id="rm-nombre" value="${escHtml(r.nombre||'')}"></div>
+        <div class="form-group"><label>Rol</label><input type="text" id="rm-rol" value="${escHtml(r.rol||'')}"></div>
+        <div class="form-group"><label>Email</label><input type="email" id="rm-email" value="${escHtml(r.email||'')}"></div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="rm-cancel">Cancelar</button>
+          <button class="btn btn-primary" id="rm-save">Guardar</button>
+        </div>
+      </div>
+    </div>
+  `);
+  document.body.appendChild(overlay);
+  overlay.querySelector('#rm-nombre').focus();
+  overlay.querySelector('#rm-cancel').addEventListener('click', () => overlay.remove());
+  overlay.querySelector('#rm-save').addEventListener('click', async () => {
+    const nombre = overlay.querySelector('#rm-nombre').value.trim();
+    if (!nombre) { toast('El nombre es requerido', 'error'); return; }
+    const body = {
+      nombre,
+      rol:   overlay.querySelector('#rm-rol').value.trim()   || null,
+      email: overlay.querySelector('#rm-email').value.trim() || null,
+    };
+    try {
+      if (isEdit) await api.updateResource(r.id, body);
+      else        await api.createResource(body);
+      overlay.remove();
+      onSave();
+    } catch (e) { toast(e.message, 'error'); }
+  });
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+function showConfirmModal(message, onConfirm) {
+  const overlay = el(`
+    <div class="modal-overlay">
+      <div class="modal" style="max-width:340px">
+        <p style="margin:0 0 20px;font-size:14px;line-height:1.6">${message}</p>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" id="cf-cancel">Cancelar</button>
+          <button class="btn btn-danger"    id="cf-ok">Eliminar</button>
+        </div>
+      </div>
+    </div>
+  `);
+  document.body.appendChild(overlay);
+  overlay.querySelector('#cf-cancel').addEventListener('click', () => overlay.remove());
+  overlay.querySelector('#cf-ok').addEventListener('click', () => { overlay.remove(); onConfirm(); });
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
 async function renderCarga() {
   const main = document.getElementById('main-content');
   const resources = await api.getCarga();
@@ -1518,10 +1574,10 @@ async function renderCarga() {
 
   function cargaTag(assignments) {
     const n = assignments.filter(a => a.project_estado === 'en_curso').length;
-    if (n === 0) return { label: 'Sin carga',   cls: 'carga-tag-none' };
-    if (n <= 2)  return { label: 'Normal',       cls: 'carga-tag-ok'   };
-    if (n <= 3)  return { label: 'Ocupado',      cls: 'carga-tag-mid'  };
-    return            { label: 'Sobrecarga',  cls: 'carga-tag-high' };
+    if (n === 0) return { label: 'Sin carga',  cls: 'carga-tag-none' };
+    if (n <= 2)  return { label: 'Normal',      cls: 'carga-tag-ok'   };
+    if (n <= 3)  return { label: 'Ocupado',     cls: 'carga-tag-mid'  };
+    return            { label: 'Sobrecarga', cls: 'carga-tag-high' };
   }
 
   const totalHoras = resources.reduce((s, r) => s + (r.hours?.seg_contados || 0), 0);
@@ -1529,32 +1585,35 @@ async function renderCarga() {
   main.innerHTML = `
     <div class="page-header">
       <h1>Carga por recurso <span class="page-count">${resources.length}</span></h1>
+      <button class="btn btn-primary" id="btn-new-resource">＋ Recurso</button>
     </div>
 
     ${resources.length === 0
-      ? '<div class="empty"><div class="empty-icon">📊</div><p>Sin recursos activos</p></div>'
+      ? '<div class="empty"><div class="empty-icon">👥</div><p>Sin recursos activos. Agregá el primero.</p></div>'
       : `<div class="carga-grid">
           ${resources.map(r => {
-            const color = avatarColor(r.nombre);
-            const tag   = cargaTag(r.assignments);
+            const color   = avatarColor(r.nombre);
+            const tag     = cargaTag(r.assignments);
             const activos = r.assignments.filter(a => a.project_estado === 'en_curso').length;
-            const horas = r.hours?.seg_contados || 0;
+            const horas   = r.hours?.seg_contados || 0;
             const pctHoras = totalHoras ? Math.round((horas / totalHoras) * 100) : 0;
-
             const proyectos = r.assignments.slice().sort((a, b) => {
               const order = { en_curso: 0, pausado: 1, backlog: 2, cerrado: 3 };
               return (order[a.project_estado] ?? 9) - (order[b.project_estado] ?? 9);
             });
-
             return `
-              <div class="carga-card">
+              <div class="carga-card" data-rid="${r.id}">
                 <div class="carga-card-header">
                   <div class="carga-avatar" style="background:${color}">${escHtml(initials(r.nombre))}</div>
                   <div class="carga-info">
                     <div class="carga-nombre">${escHtml(r.nombre)}</div>
                     <div class="carga-rol">${escHtml(r.rol || 'Sin rol')}${r.email ? ` · ${escHtml(r.email)}` : ''}</div>
                   </div>
-                  <span class="carga-tag ${tag.cls}">${tag.label}</span>
+                  <div class="carga-card-actions">
+                    <span class="carga-tag ${tag.cls}">${tag.label}</span>
+                    <button class="btn btn-ghost btn-xs carga-edit" data-rid="${r.id}" title="Editar">✏</button>
+                    <button class="btn btn-ghost btn-xs carga-del"  data-rid="${r.id}" title="Eliminar">🗑</button>
+                  </div>
                 </div>
 
                 <div class="carga-stats">
@@ -1577,11 +1636,13 @@ async function renderCarga() {
                   <div class="carga-bar-fill" style="width:${pctHoras}%;background:${color}"></div>
                 </div>` : ''}
 
-                ${proyectos.length === 0
-                  ? `<p class="carga-empty">Sin proyectos asignados</p>`
-                  : `<div class="carga-project-list">
-                      ${proyectos.map(a => `
-                        <div class="carga-project-row" data-pid="${a.project_id}">
+                <div class="carga-project-list" data-rid="${r.id}">
+                  ${proyectos.length === 0
+                    ? `<p class="carga-empty carga-drop-hint">Soltá un proyecto aquí</p>`
+                    : proyectos.map(a => `
+                        <div class="carga-project-row" draggable="true"
+                          data-pid="${a.project_id}" data-aid="${a.id}" data-rid="${r.id}">
+                          <span class="carga-drag-handle">⠿</span>
                           <span class="semaforo semaforo-${a.project_estado === 'en_curso' ? 'green' : a.project_estado === 'pausado' ? 'yellow' : 'grey'}"></span>
                           <span class="carga-project-name">${escHtml(a.project_nombre)}</span>
                           <span class="carga-project-right">
@@ -1590,7 +1651,7 @@ async function renderCarga() {
                           </span>
                         </div>
                       `).join('')}
-                    </div>`}
+                </div>
               </div>
             `;
           }).join('')}
@@ -1598,9 +1659,84 @@ async function renderCarga() {
     }
   `;
 
-  main.querySelectorAll('.carga-project-row[data-pid]').forEach(row =>
+  document.getElementById('btn-new-resource')?.addEventListener('click', () =>
+    showResourceModal(null, renderCarga)
+  );
+
+  // Edit / Delete resource buttons
+  main.querySelectorAll('.carga-edit').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const r = resources.find(r => String(r.id) === btn.dataset.rid);
+      if (r) showResourceModal(r, renderCarga);
+    });
+  });
+
+  main.querySelectorAll('.carga-del').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const r = resources.find(r => String(r.id) === btn.dataset.rid);
+      if (!r) return;
+      const msg = r.assignments.length
+        ? `¿Eliminar a <strong>${escHtml(r.nombre)}</strong>? Tiene ${r.assignments.length} proyecto${r.assignments.length > 1 ? 's' : ''} asignado${r.assignments.length > 1 ? 's' : ''}. Las asignaciones también se eliminarán.`
+        : `¿Eliminar a <strong>${escHtml(r.nombre)}</strong>?`;
+      showConfirmModal(msg, async () => {
+        try {
+          await api.deleteResource(r.id);
+          toast(`${r.nombre} eliminado`, 'success');
+          renderCarga();
+        } catch (err) { toast(err.message, 'error'); }
+      });
+    });
+  });
+
+  // Click to navigate
+  main.querySelectorAll('.carga-project-row').forEach(row =>
     row.addEventListener('click', () => navigate('project-detail', { id: row.dataset.pid }))
   );
+
+  // Drag-and-drop: move project between resources
+  let dragging = null;
+
+  main.querySelectorAll('.carga-project-row').forEach(row => {
+    row.addEventListener('dragstart', e => {
+      dragging = { pid: row.dataset.pid, aid: row.dataset.aid, rid: row.dataset.rid };
+      row.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    row.addEventListener('dragend', () => {
+      row.classList.remove('dragging');
+      dragging = null;
+      main.querySelectorAll('.carga-card').forEach(c => c.classList.remove('carga-drop-over'));
+    });
+  });
+
+  main.querySelectorAll('.carga-card').forEach(card => {
+    card.addEventListener('dragover', e => {
+      if (!dragging) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      card.classList.add('carga-drop-over');
+    });
+    card.addEventListener('dragleave', e => {
+      if (!card.contains(e.relatedTarget)) card.classList.remove('carga-drop-over');
+    });
+    card.addEventListener('drop', async e => {
+      e.preventDefault();
+      card.classList.remove('carga-drop-over');
+      if (!dragging) return;
+      const tgtRid = card.dataset.rid;
+      if (tgtRid === dragging.rid) return;
+      try {
+        await api.createAssignment(dragging.pid, { resource_id: Number(tgtRid) });
+        await api.deleteAssignment(dragging.pid, dragging.aid);
+        toast('Proyecto reasignado', 'success');
+        renderCarga();
+      } catch (err) {
+        toast(err.message === 'ya asignado' ? 'Ese recurso ya tiene este proyecto asignado' : err.message, 'error');
+      }
+    });
+  });
 }
 
 // ── ⑥ Settings ────────────────────────────────────────────
