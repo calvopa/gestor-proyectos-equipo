@@ -200,6 +200,8 @@ ${lines}`;
     if (!apiRes.ok) throw new Error(data.error?.message || `Groq API ${apiRes.status}`);
     const summary = data.choices?.[0]?.message?.content?.trim() || 'No se pudo generar resumen.';
 
+    db.prepare('UPDATE projects SET ai_summary=? WHERE id=?').run(summary, req.params.id);
+
     res.json({ summary });
   } catch (err) {
     console.error('[projects] AI summary error:', err);
