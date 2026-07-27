@@ -656,7 +656,7 @@ async function showProjectModal(id = null) {
           <div class="form-group">
             <label>Estado</label>
             <select id="m-estado">
-              ${['backlog','en_curso','pausado','cerrado'].map(e => `<option value="${e}" ${(p.estado||'backlog')===e?'selected':''}>${e}</option>`).join('')}
+              ${loadKanbanCols().map(c => `<option value="${escHtml(c.key)}" ${(p.estado||'backlog')===c.key?'selected':''}>${escHtml(c.label)}</option>`).join('')}
             </select>
           </div>
           <div class="form-group">
@@ -712,6 +712,133 @@ async function showProjectModal(id = null) {
   });
 }
 
+// ── Kanban column config ──────────────────────────────────
+const KANBAN_DEFAULT_COLS = [
+  { key: 'backlog',  label: 'Backlog',  color: '#94a3b8' },
+  { key: 'en_curso', label: 'En curso', color: '#6CAAD9' },
+  { key: 'pausado',  label: 'Pausado',  color: '#fbbf24' },
+  { key: 'cerrado',  label: 'Cerrado',  color: '#98D293' },
+];
+const KANBAN_PALETTE = ['#94a3b8','#6CAAD9','#fbbf24','#98D293','#EB8398','#a78bfa','#f97316','#22d3ee'];
+
+function loadKanbanCols() {
+  try {
+    const s = JSON.parse(localStorage.getItem('gestor_kanban_cols') || 'null');
+    if (Array.isArray(s) && s.length) return s;
+  } catch {}
+  return [...KANBAN_DEFAULT_COLS];
+}
+
+function saveKanbanCols(cols) {
+  localStorage.setItem('gestor_kanban_cols', JSON.stringify(cols));
+}
+
+function slugify(str) {
+  return str.toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    || ('col_' + Date.now());
+}
+
+function showKanbanColsModal(onSave) {
+  let cols = loadKanbanCols();
+  let selectedColor = KANBAN_PALETTE[0];
+
+  function renderList(container) {
+    container.innerHTML = cols.map((c, i) => `
+      <div class="kcol-row">
+        <span class="kcol-dot" style="background:${c.color}"></span>
+        <span class="kcol-label">${escHtml(c.label)}</span>
+        <div class="kcol-actions">
+          <button class="btn btn-ghost btn-xs kcol-up"   data-i="${i}" ${i === 0             ? 'disabled' : ''}>▲</button>
+          <button class="btn btn-ghost btn-xs kcol-down" data-i="${i}" ${i === cols.length-1 ? 'disabled' : ''}>▼</button>
+          <button class="btn btn-ghost btn-xs kcol-del"  data-i="${i}" ${cols.length <= 1    ? 'disabled' : ''}>✕</button>
+        </div>
+      </div>
+    `).join('');
+
+    container.querySelectorAll('.kcol-up').forEach(btn =>
+      btn.addEventListener('click', () => {
+        const i = +btn.dataset.i;
+        if (i > 0) { [cols[i-1], cols[i]] = [cols[i], cols[i-1]]; renderList(container); }
+      })
+    );
+    container.querySelectorAll('.kcol-down').forEach(btn =>
+      btn.addEventListener('click', () => {
+        const i = +btn.dataset.i;
+        if (i < cols.length-1) { [cols[i], cols[i+1]] = [cols[i+1], cols[i]]; renderList(container); }
+      })
+    );
+    container.querySelectorAll('.kcol-del').forEach(btn =>
+      btn.addEventListener('click', () => { cols.splice(+btn.dataset.i, 1); renderList(container); })
+    );
+  }
+
+  const overlay = el(`
+    <div class="modal-overlay">
+      <div class="modal" style="max-width:420px">
+        <h2>Gestionar columnas</h2>
+        <div id="kcol-list"></div>
+        <div class="kcol-add">
+          <p class="kcol-add-label">Agregar columna</p>
+          <div class="kcol-palette" id="kcol-palette">
+            ${KANBAN_PALETTE.map((c, i) => `<button class="kcol-swatch${i===0?' active':''}" data-color="${c}" style="background:${c}"></button>`).join('')}
+          </div>
+          <div style="display:flex;gap:6px;margin-top:8px">
+            <input type="text" id="kcol-name" placeholder="Nombre de columna…" style="flex:1">
+            <button class="btn btn-primary btn-sm" id="kcol-agregar">＋ Agregar</button>
+          </div>
+        </div>
+        <div class="modal-footer" style="justify-content:space-between">
+          <button class="btn btn-ghost btn-sm" id="kcol-reset">Restablecer</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-secondary" id="kcol-cancel">Cancelar</button>
+            <button class="btn btn-primary"   id="kcol-save">Guardar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `);
+
+  document.body.appendChild(overlay);
+  const listEl = overlay.querySelector('#kcol-list');
+  renderList(listEl);
+
+  overlay.querySelectorAll('.kcol-swatch').forEach(sw =>
+    sw.addEventListener('click', () => {
+      overlay.querySelectorAll('.kcol-swatch').forEach(s => s.classList.remove('active'));
+      sw.classList.add('active');
+      selectedColor = sw.dataset.color;
+    })
+  );
+
+  overlay.querySelector('#kcol-agregar').addEventListener('click', () => {
+    const name = overlay.querySelector('#kcol-name').value.trim();
+    if (!name) { toast('Escribí un nombre de columna', 'error'); return; }
+    const key = slugify(name);
+    if (cols.find(c => c.key === key)) { toast('Ya existe una columna con ese nombre', 'error'); return; }
+    cols.push({ key, label: name, color: selectedColor });
+    overlay.querySelector('#kcol-name').value = '';
+    renderList(listEl);
+  });
+
+  overlay.querySelector('#kcol-reset').addEventListener('click', () => {
+    cols = [...KANBAN_DEFAULT_COLS];
+    renderList(listEl);
+  });
+
+  overlay.querySelector('#kcol-cancel').addEventListener('click', () => overlay.remove());
+  overlay.querySelector('#kcol-save').addEventListener('click', () => {
+    if (!cols.length) { toast('Necesitás al menos una columna', 'error'); return; }
+    saveKanbanCols(cols);
+    overlay.remove();
+    onSave();
+  });
+
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
 // ── ② Kanban ──────────────────────────────────────────────
 async function renderKanban() {
   const main = document.getElementById('main-content');
@@ -720,8 +847,24 @@ async function renderKanban() {
     api.getResources({ activo: '1' }),
   ]);
 
-  const columns = ['backlog','en_curso','pausado','cerrado'];
-  const labels = { backlog: 'Backlog', en_curso: 'En curso', pausado: 'Pausado', cerrado: 'Cerrado' };
+  let kanbanCols = loadKanbanCols();
+
+  function buildBoard() {
+    const board = main.querySelector('.kanban');
+    if (!board) return;
+    board.style.gridTemplateColumns = `repeat(${kanbanCols.length}, minmax(220px, 1fr))`;
+    board.innerHTML = kanbanCols.map(col => `
+      <div class="kanban-col" data-estado="${escHtml(col.key)}">
+        <div class="kanban-col-header" style="color:${col.color}">
+          <span>${escHtml(col.label)}</span>
+          <span class="kanban-col-count" data-col="${escHtml(col.key)}">0</span>
+        </div>
+        <div class="kanban-cards" data-estado="${escHtml(col.key)}"></div>
+      </div>
+    `).join('');
+    wireColumns();
+    applyFilters();
+  }
 
   main.innerHTML = `
     <div class="page-header">
@@ -740,21 +883,15 @@ async function renderKanban() {
       </select>
       <button class="btn btn-ghost btn-sm" id="kf-riesgo">⚠ En riesgo</button>
       <button class="btn btn-ghost btn-sm" id="kf-clear" style="display:none">✕ Limpiar</button>
+      <button class="btn btn-ghost btn-sm" id="kf-cols" style="margin-left:auto">⚙ Columnas</button>
     </div>
-    <div class="kanban">
-      ${columns.map(col => `
-        <div class="kanban-col" data-estado="${col}">
-          <div class="kanban-col-header">
-            <span>${labels[col]}</span>
-            <span class="kanban-col-count" data-col="${col}">0</span>
-          </div>
-          <div class="kanban-cards" data-estado="${col}"></div>
-        </div>
-      `).join('')}
-    </div>
+    <div class="kanban" style="grid-template-columns:repeat(${kanbanCols.length},minmax(220px,1fr))"></div>
   `;
 
   document.getElementById('btn-new-project').addEventListener('click', () => showProjectModal());
+  document.getElementById('kf-cols').addEventListener('click', () =>
+    showKanbanColsModal(() => { kanbanCols = loadKanbanCols(); buildBoard(); })
+  );
 
   let soloRiesgo = false;
   let dragging = null;
@@ -765,7 +902,7 @@ async function renderKanban() {
       ? `<span class="kanban-salud kanban-salud-${salud.level}">${escHtml(salud.titulo)}</span>` : '';
     const tecs = p.tecnicos ? p.tecnicos.split(',').map(t => t.trim()).filter(Boolean) : [];
     return `
-      <div class="kanban-card" draggable="true" data-id="${p.id}" data-estado="${p.estado}">
+      <div class="kanban-card" draggable="true" data-id="${p.id}" data-estado="${escHtml(p.estado)}">
         <div class="kanban-card-title">
           <span class="semaforo semaforo-${salud.level}" style="margin-right:7px" title="${escHtml(salud.detalle)}"></span>
           ${escHtml(p.nombre)}
@@ -791,26 +928,22 @@ async function renderKanban() {
     document.getElementById('kf-riesgo').classList.toggle('btn-primary', soloRiesgo);
     document.getElementById('kf-riesgo').classList.toggle('btn-ghost', !soloRiesgo);
 
-    columns.forEach(col => {
-      let visible = projects.filter(p => p.estado === col);
+    kanbanCols.forEach(({ key }) => {
+      let visible = projects.filter(p => p.estado === key);
 
-      if (search)     visible = visible.filter(p => p.nombre.toLowerCase().includes(search));
-      if (prioridad)  visible = visible.filter(p => p.prioridad === prioridad);
-      if (tecnicoNombre) {
-        visible = visible.filter(p => {
-          const tecs = p.tecnicos ? p.tecnicos.split(',').map(t => t.trim()) : [];
-          return tecs.some(t => t.toLowerCase() === tecnicoNombre.toLowerCase());
-        });
-      }
-      if (soloRiesgo) {
-        visible = visible.filter(p => {
-          const s = calcSalud(p);
-          return s.level === 'red' || s.level === 'yellow';
-        });
-      }
+      if (search)        visible = visible.filter(p => p.nombre.toLowerCase().includes(search));
+      if (prioridad)     visible = visible.filter(p => p.prioridad === prioridad);
+      if (tecnicoNombre) visible = visible.filter(p => {
+        const tecs = p.tecnicos ? p.tecnicos.split(',').map(t => t.trim()) : [];
+        return tecs.some(t => t.toLowerCase() === tecnicoNombre.toLowerCase());
+      });
+      if (soloRiesgo)    visible = visible.filter(p => {
+        const s = calcSalud(p);
+        return s.level === 'red' || s.level === 'yellow';
+      });
 
-      const container = main.querySelector(`.kanban-cards[data-estado="${col}"]`);
-      const countEl   = main.querySelector(`.kanban-col-count[data-col="${col}"]`);
+      const container = main.querySelector(`.kanban-cards[data-estado="${key}"]`);
+      const countEl   = main.querySelector(`.kanban-col-count[data-col="${key}"]`);
       if (container) container.innerHTML = visible.map(kanbanCardHtml).join('');
       if (countEl)   countEl.textContent = visible.length;
 
@@ -827,24 +960,25 @@ async function renderKanban() {
       });
   }
 
-  // Column drag-over / drop (event delegation on columns)
-  main.querySelectorAll('.kanban-col').forEach(col => {
-    col.addEventListener('dragover',  e => { e.preventDefault(); col.classList.add('drag-over'); });
-    col.addEventListener('dragleave', () => col.classList.remove('drag-over'));
-    col.addEventListener('drop', async (e) => {
-      e.preventDefault();
-      col.classList.remove('drag-over');
-      if (!dragging) return;
-      const newEstado = col.dataset.estado;
-      const id = dragging.dataset.id;
-      if (dragging.dataset.estado === newEstado) return;
-      try {
-        await api.updateProject(id, { estado: newEstado });
-        toast('Estado actualizado', 'success');
-        renderKanban();
-      } catch (err) { toast(err.message, 'error'); }
+  function wireColumns() {
+    main.querySelectorAll('.kanban-col').forEach(col => {
+      col.addEventListener('dragover',  e => { e.preventDefault(); col.classList.add('drag-over'); });
+      col.addEventListener('dragleave', () => col.classList.remove('drag-over'));
+      col.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        col.classList.remove('drag-over');
+        if (!dragging) return;
+        const newEstado = col.dataset.estado;
+        const id = dragging.dataset.id;
+        if (dragging.dataset.estado === newEstado) return;
+        try {
+          await api.updateProject(id, { estado: newEstado });
+          toast('Estado actualizado', 'success');
+          renderKanban();
+        } catch (err) { toast(err.message, 'error'); }
+      });
     });
-  });
+  }
 
   // Filter events
   ['kf-search','kf-prioridad','kf-tecnico'].forEach(id =>
@@ -862,7 +996,7 @@ async function renderKanban() {
     applyFilters();
   });
 
-  applyFilters();
+  buildBoard();
 }
 
 // ── ③ Project detail ──────────────────────────────────────
