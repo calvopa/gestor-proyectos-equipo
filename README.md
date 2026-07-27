@@ -1,12 +1,12 @@
-# Gestor de Proyectos del Equipo
+# Gestor de Proyectos GCS
 
-Herramienta web interna para gestionar proyectos, recursos y horas del equipo. Stack: Node + Express + SQLite (better-sqlite3). Frontend vanilla JS, dark mode.
+Herramienta web interna para gestionar proyectos, recursos y horas del equipo técnico de GrupoCESA. Stack: Node.js + Express + SQLite (better-sqlite3). Frontend vanilla JS con 3 temas visuales.
 
 ## Levantar con Docker Compose
 
 ```bash
 cp .env.example .env
-# Editá .env si querés cambiar PORT o agregar CLICKUP_TOKEN
+# Editá .env con PORT, CLICKUP_TOKEN, GROQ_API_KEY
 docker compose up -d
 ```
 
@@ -21,33 +21,60 @@ App disponible en `http://localhost:3000` (o el PORT configurado).
 | `CLICKUP_TOKEN` | — | Token personal de ClickUp (`pk_xxx`) |
 | `CLICKUP_TEAM_ID` | — | ID del workspace de ClickUp |
 | `SYNC_INTERVAL_MIN` | `30` | Intervalo auto-sync en minutos (0 = desactivado) |
+| `GROQ_API_KEY` | — | API key de Groq para resúmenes IA (`gsk_xxx`) |
 
 ## Configurar token de ClickUp
 
-Podés cargarlo de dos formas:
-
 1. **Env del stack** (recomendado para Portainer): cargá `CLICKUP_TOKEN` y `CLICKUP_TEAM_ID` en las variables del stack.
-2. **Desde la UI**: ir a Configuración → Integración ClickUp → guardar el token.
+2. **Desde la UI**: Configuración → Integración ClickUp → guardar el token.
 
-El token personal se obtiene en: ClickUp → Avatar → Settings → Apps → API Token.
+Token personal: ClickUp → Avatar → Settings → Apps → API Token.
+
+## Resúmenes con IA
+
+La app integra **Groq** (`llama-3.1-8b-instant`) para generar resúmenes de 3 líneas por proyecto:
+
+- **Vista Proyectos**: botón ✨ en cada fila → genera y guarda resumen en `projects.ai_summary`
+- **Vista Semana**: botón ✨ por card → guarda en `weekly_snapshots.ai_summary`
+- **Modo presentación**: botón ✨ disponible dentro del overlay de presentación
+- El resumen persiste hasta que se regenera manualmente
+
+Requiere `GROQ_API_KEY` en el `.env` del servidor.
+
+## Temas visuales
+
+El nav incluye un selector de tema persistido en `localStorage`:
+
+| Tema | Descripción |
+|---|---|
+| 🌙 Dark | Dark mode (default) con sidebar oscuro |
+| ☀ Flat | Diseño plano, fondo claro, sidebar azul |
+| ◉ Neu | Neumorphism, sombras suaves extruidas/hundidas |
 
 ## Sync con ClickUp
 
 - **Manual**: Configuración → "Sync ahora" o `POST /api/sync/clickup`
-- **Automático**: cada `SYNC_INTERVAL_MIN` minutos (configurable, 0 para desactivar)
-- El sync es idempotente: correrlo N veces no duplica proyectos ni recursos (upsert por `clickup_id`)
+- **Automático**: cada `SYNC_INTERVAL_MIN` minutos
+- Idempotente: upsert por `clickup_id`
 
-## Dónde vive la DB y cómo respaldarla
+## Exportar a Google Sheets
 
-La base de datos vive en el volumen Docker `gestor-proyectos-data`, mapeado a `/data/gestor.sqlite` dentro del container.
+Requiere configurar el webhook URL en Configuración → Sheets webhook URL.
+
+Los exports incluyen:
+- **Vista Semana**: fase, salud, eventos, movimiento, horas estimadas, Resumen IA
+- **Vista Proyectos**: estado, prioridad, técnicos, Horas reg., Horas est., Resumen IA
+
+Ver documentación completa en `apps-script/webhook.gs`.
+
+## Dónde vive la DB
+
+La base de datos vive en el volumen Docker `gestor-proyectos-data`, mapeado a `/data/gestor.sqlite`.
 
 ```bash
 # Backup
 docker run --rm -v gestor-proyectos-data:/data -v $(pwd):/backup alpine \
   cp /data/gestor.sqlite /backup/gestor-$(date +%Y%m%d).sqlite
-
-# Ver dónde está en el host
-docker volume inspect gestor-proyectos-data
 ```
 
 ## Despliegue en Portainer (stack Git)
@@ -55,34 +82,14 @@ docker volume inspect gestor-proyectos-data
 1. Stacks → Add stack → Git repository
 2. Repository URL: `https://github.com/calvopa/gestor-proyectos-equipo`
 3. Compose path: `docker-compose.yml`
-4. Variables de entorno del stack: `PORT=3100`, `CLICKUP_TOKEN=pk_...`, `CLICKUP_TEAM_ID=...`
+4. Variables: `PORT=3100`, `CLICKUP_TOKEN=pk_...`, `CLICKUP_TEAM_ID=...`, `GROQ_API_KEY=gsk_...`
 5. Deploy
 
-Para actualizar: `git push` al repo + "Pull and redeploy" en Portainer.
+Para actualizar: `git push` al repo + `git pull && docker compose up -d --build` en el servidor.
 
-## Nginx reverse proxy (Nginx Proxy Manager)
-
-Apuntá el proxy host al container en el puerto configurado (`3100` en srv-portainer).
+## Nginx reverse proxy
 
 ```
-Forward hostname: gestor (nombre del servicio en la red de Docker)
+Forward hostname: gestor
 Forward port:     3100
-```
-
-O usá el bloque de Nginx directamente:
-
-```nginx
-server {
-    listen 80;
-    server_name proyectos.local;
-
-    location / {
-        proxy_pass http://localhost:3100;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-    }
-}
 ```
