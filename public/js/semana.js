@@ -538,14 +538,26 @@ async function semanaExportSheets() {
   const { data } = semanaState;
   if (!data) return;
 
+  const projects = data.projects || [];
+  if (!projects.length) {
+    toast('Sin proyectos para exportar', 'error', 4000);
+    return;
+  }
+
   const btn = document.getElementById('sem-export-sheets');
   btn.disabled = true;
   btn.textContent = '⏳ Exportando...';
 
+  // Strip events (not used by Apps Script) to reduce payload size
+  const payload = {
+    ...data,
+    projects: projects.map(({ events: _e, ...p }) => p),
+  };
+
   try {
     const result = await api._fetch('/api/export/sheets', {
       method: 'POST',
-      body: data,
+      body: payload,
     });
     if (result.ok) {
       toast(`✅ Exportado a Sheets · Solapa "${result.tab}" · ${result.rows} filas`, 'success', 5000);

@@ -13,14 +13,19 @@ router.post('/sheets', async (req, res) => {
   }
 
   try {
+    const bodyStr = JSON.stringify(req.body);
+    const projectCount = req.body?.projects?.length ?? 'n/a';
+    console.log(`[export/sheets] type=${req.body?.type || (req.body?.week_start ? 'semana' : 'unknown')} projects=${projectCount} payload=${bodyStr.length}b`);
+
     const response = await fetch(url, {
       method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(req.body),
+      body:    bodyStr,
     });
     const text = await response.text();
     let data;
     try { data = JSON.parse(text); } catch { data = { raw: text }; }
+    console.log(`[export/sheets] response: ${text.slice(0, 200)}`);
     res.json(data);
   } catch (err) {
     res.status(502).json({ error: `Error contactando webhook: ${err.message}` });

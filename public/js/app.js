@@ -573,6 +573,11 @@ async function renderProjects(params = {}) {
 
 // ── Projects → Sheets export ──────────────────────────────
 async function projectsExportSheets(projects) {
+  if (!projects || !projects.length) {
+    toast('Sin proyectos visibles para exportar. Revisá los filtros activos.', 'error', 5000);
+    return;
+  }
+
   const btn = document.getElementById('btn-export-sheets-projects');
   if (btn) { btn.disabled = true; btn.textContent = '⏳ Exportando...'; }
 
