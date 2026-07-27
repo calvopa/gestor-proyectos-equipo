@@ -129,6 +129,7 @@ const routes = {
   'project-detail': renderProjectDetail,
   'resources':      renderResources,
   'carga':          renderCarga,
+  'gantt':          renderGantt,
   'settings':       renderSettings,
   'dashboard':      renderDashboard,
   'semana':         () => renderSemana(),
@@ -1498,6 +1499,178 @@ async function showResourceModal(id = null) {
       renderResources();
     } catch (e) { toast(e.message, 'error'); }
   });
+}
+
+// ── ⑤ Gantt ───────────────────────────────────────────────
+async function renderGantt() {
+  const main = document.getElementById('main-content');
+  const allProjects = await api.getProjects();
+  const projects = allProjects.filter(p => p.fecha_fin_est);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  let filterSearch = '';
+  let filterEstado = '';
+
+  function buildChart(filtered) {
+    if (!filtered.length) {
+      return `<div class="empty" style="margin-top:40px"><div class="empty-icon">📅</div>
+        <p>Sin proyectos con fecha de vencimiento cargada</p></div>`;
+    }
+
+    const sorted = filtered.slice().sort((a, b) => {
+      const aS = new Date(a.fecha_inicio || a.fecha_fin_est);
+      const bS = new Date(b.fecha_inicio || b.fecha_fin_est);
+      return aS - bS;
+    });
+
+    const allStarts = sorted.map(p => new Date(p.fecha_inicio || p.fecha_fin_est));
+    const allEnds   = sorted.map(p => new Date(p.fecha_fin_est));
+
+    let minDate = new Date(Math.min(...allStarts.map(d => d.getTime()), today.getTime()));
+    let maxDate = new Date(Math.max(...allEnds.map(d => d.getTime())));
+    minDate.setDate(minDate.getDate() - 7);
+    maxDate.setDate(maxDate.getDate() + 14);
+    minDate.setHours(0, 0, 0, 0);
+    maxDate.setHours(0, 0, 0, 0);
+
+    const totalDays = Math.round((maxDate - minDate) / 86400000);
+    const DAY_W = Math.max(6, Math.min(32, Math.floor(1100 / totalDays)));
+    const totalW  = totalDays * DAY_W;
+    const todayX  = Math.round((today - minDate) / 86400000) * DAY_W;
+
+    // Month markers
+    const monthMarkers = [];
+    let cur = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+    while (cur <= maxDate) {
+      const left = Math.max(0, Math.round((cur - minDate) / 86400000) * DAY_W);
+      const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+      const w = Math.round((Math.min(next, maxDate) - Math.max(cur, minDate)) / 86400000) * DAY_W;
+      const label = cur.toLocaleString('es-AR', { month: 'short', year: '2-digit' });
+      monthMarkers.push({ left, w, label });
+      cur = next;
+    }
+
+    // Week lines
+    const weekLines = [];
+    const wStart = new Date(minDate);
+    while (wStart.getDay() !== 1) wStart.setDate(wStart.getDate() + 1);
+    while (wStart < maxDate) {
+      weekLines.push(Math.round((wStart - minDate) / 86400000) * DAY_W);
+      wStart.setDate(wStart.getDate() + 7);
+    }
+
+    const gridLines = weekLines.map(x =>
+      `<div class="gantt-grid-line" style="left:${x}px"></div>`).join('');
+    const todayLine = `<div class="gantt-today-line" style="left:${todayX}px"></div>`;
+    const monthsHtml = monthMarkers.map(m =>
+      `<div class="gantt-month-label" style="left:${m.left}px;width:${m.w}px">${m.label}</div>`).join('');
+
+    const rowsHtml = sorted.map(p => {
+      const salud     = calcSalud(p);
+      const hasStart  = !!p.fecha_inicio;
+      const startDate = new Date(p.fecha_inicio || p.fecha_fin_est);
+      const endDate   = new Date(p.fecha_fin_est);
+      const barLeft   = Math.round((startDate - minDate) / 86400000) * DAY_W;
+      const barW      = Math.max(DAY_W * 2, Math.round((endDate - startDate) / 86400000) * DAY_W + DAY_W);
+      const tecs      = p.tecnicos ? p.tecnicos.split(',').map(t => t.trim()).filter(Boolean) : [];
+      const [,mm,dd]  = p.fecha_fin_est.split('-');
+
+      return `
+        <div class="gantt-row" data-id="${p.id}">
+          <div class="gantt-name-col">
+            <span class="semaforo semaforo-${salud.level}" style="flex-shrink:0" title="${escHtml(salud.detalle)}"></span>
+            <span class="gantt-name-text" title="${escHtml(p.nombre)}">${escHtml(p.nombre)}</span>
+            <span class="gantt-due-lbl">${dd}/${mm}</span>
+          </div>
+          <div class="gantt-chart-col" style="width:${totalW}px">
+            ${gridLines}${todayLine}
+            <div class="gantt-bar gantt-bar-${salud.level}${!hasStart ? ' gantt-bar-nostart' : ''}"
+                 style="left:${barLeft}px;width:${barW}px"
+                 title="${escHtml(p.nombre)}&#10;${p.fecha_inicio ? p.fecha_inicio + ' → ' : '→ '}${p.fecha_fin_est}${tecs.length ? '&#10;' + tecs.join(', ') : ''}">
+              <span class="gantt-bar-label">${escHtml(p.nombre)}</span>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+
+    const headerChartHtml = `
+      <div class="gantt-chart-col gantt-month-row" style="width:${totalW}px">
+        ${monthsHtml}${gridLines}${todayLine}
+      </div>`;
+
+    return `
+      <div class="gantt-container" id="gantt-scroll">
+        <div class="gantt-row gantt-header-row">
+          <div class="gantt-name-col gantt-name-header">
+            Proyecto <span style="font-weight:400;margin-left:4px">(${filtered.length})</span>
+          </div>
+          ${headerChartHtml}
+        </div>
+        ${rowsHtml}
+      </div>`;
+  }
+
+  function redraw() {
+    let f = projects;
+    if (filterSearch) f = f.filter(p => p.nombre.toLowerCase().includes(filterSearch));
+    if (filterEstado) f = f.filter(p => p.estado === filterEstado);
+    document.getElementById('gantt-chart').innerHTML = buildChart(f);
+    wireRows();
+    scrollToToday();
+  }
+
+  function wireRows() {
+    main.querySelectorAll('.gantt-row[data-id]').forEach(row =>
+      row.addEventListener('click', () => navigate('project-detail', { id: row.dataset.id }))
+    );
+    main.querySelectorAll('.gantt-bar').forEach(bar =>
+      bar.addEventListener('click', e => {
+        e.stopPropagation();
+        navigate('project-detail', { id: bar.closest('.gantt-row').dataset.id });
+      })
+    );
+  }
+
+  function scrollToToday() {
+    setTimeout(() => {
+      const scroll = document.getElementById('gantt-scroll');
+      const line = scroll?.querySelector('.gantt-today-line');
+      if (scroll && line) scroll.scrollLeft = Math.max(0, parseInt(line.style.left) - 240);
+    }, 30);
+  }
+
+  main.innerHTML = `
+    <div class="page-header">
+      <h1>Gantt <span class="page-count">${projects.length}</span></h1>
+    </div>
+    <div class="kanban-filters" style="margin-bottom:12px">
+      <input type="search" id="gf-search" placeholder="Buscar proyecto…" class="filter-search">
+      <select id="gf-estado" class="filter-select">
+        <option value="">Todos los estados</option>
+        <option value="backlog">Backlog</option>
+        <option value="en_curso">En curso</option>
+        <option value="pausado">Pausado</option>
+        <option value="cerrado">Cerrado</option>
+      </select>
+      <span style="font-size:12px;color:var(--text2);margin-left:auto">
+        Solo proyectos con fecha de vencimiento · <span class="gantt-today-dot"></span> Hoy
+      </span>
+    </div>
+    <div id="gantt-chart"></div>
+  `;
+
+  document.getElementById('gf-search').addEventListener('input', e => {
+    filterSearch = e.target.value.toLowerCase().trim();
+    redraw();
+  });
+  document.getElementById('gf-estado').addEventListener('change', e => {
+    filterEstado = e.target.value;
+    redraw();
+  });
+
+  redraw();
 }
 
 // ── ⑤ Carga por recurso ───────────────────────────────────
