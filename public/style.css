@@ -725,6 +725,45 @@ textarea { resize: vertical; min-height: 80px; }
 
 .kanban-card-title { font-weight: 600; font-size: 13px; margin-bottom: 6px; }
 .kanban-card-meta  { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.kanban-card-tecs  { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 7px; }
+.kanban-tec {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  color: var(--text2);
+}
+
+/* ── Kanban filtros ── */
+.kanban-filters {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.filter-search {
+  padding: 6px 10px;
+  font-size: 13px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  min-width: 180px;
+}
+.filter-search:focus { outline: none; border-color: var(--accent); }
+.filter-select {
+  padding: 5px 8px;
+  font-size: 13px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  cursor: pointer;
+}
+.filter-select:focus { outline: none; border-color: var(--accent); }
 
 /* ── Timer ── */
 .timer-section {

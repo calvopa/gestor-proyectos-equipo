@@ -715,41 +715,40 @@ async function showProjectModal(id = null) {
 // ── ② Kanban ──────────────────────────────────────────────
 async function renderKanban() {
   const main = document.getElementById('main-content');
-  const projects = await api.getProjects();
+  const [projects, resources] = await Promise.all([
+    api.getProjects(),
+    api.getResources({ activo: '1' }),
+  ]);
 
   const columns = ['backlog','en_curso','pausado','cerrado'];
   const labels = { backlog: 'Backlog', en_curso: 'En curso', pausado: 'Pausado', cerrado: 'Cerrado' };
-
-  const byCol = Object.fromEntries(columns.map(c => [c, projects.filter(p => p.estado === c)]));
 
   main.innerHTML = `
     <div class="page-header">
       <h1>Kanban</h1>
       <button class="btn btn-primary" id="btn-new-project">＋ Nuevo proyecto</button>
     </div>
+    <div class="kanban-filters">
+      <input type="search" id="kf-search" placeholder="Buscar proyecto…" class="filter-search">
+      <select id="kf-prioridad" class="filter-select">
+        <option value="">Todas las prioridades</option>
+        ${['baja','media','alta','critica'].map(p => `<option value="${p}">${p}</option>`).join('')}
+      </select>
+      <select id="kf-tecnico" class="filter-select">
+        <option value="">Todos los técnicos</option>
+        ${resources.map(r => `<option value="${r.id}">${escHtml(r.nombre)}</option>`).join('')}
+      </select>
+      <button class="btn btn-ghost btn-sm" id="kf-riesgo">⚠ En riesgo</button>
+      <button class="btn btn-ghost btn-sm" id="kf-clear" style="display:none">✕ Limpiar</button>
+    </div>
     <div class="kanban">
       ${columns.map(col => `
         <div class="kanban-col" data-estado="${col}">
           <div class="kanban-col-header">
             <span>${labels[col]}</span>
-            <span>${byCol[col].length}</span>
+            <span class="kanban-col-count" data-col="${col}">0</span>
           </div>
-          <div class="kanban-cards" data-estado="${col}">
-            ${byCol[col].map(p => {
-              const salud = calcSalud(p);
-              const alerta = (salud.level === 'red' || salud.level === 'yellow')
-                ? `<span class="kanban-salud kanban-salud-${salud.level}">${escHtml(salud.titulo)}</span>` : '';
-              return `
-              <div class="kanban-card" draggable="true" data-id="${p.id}" data-estado="${p.estado}">
-                <div class="kanban-card-title"><span class="semaforo semaforo-${salud.level}" style="margin-right:7px" title="${escHtml(salud.detalle)}"></span>${escHtml(p.nombre)}</div>
-                <div class="kanban-card-meta">
-                  ${badgePrio(p.prioridad)}
-                  ${alerta}
-                  ${!p.cuenta_horas ? '<span class="no-cuenta-badge">sin cómputo</span>' : ''}
-                </div>
-              </div>
-            `; }).join('')}
-          </div>
+          <div class="kanban-cards" data-estado="${col}"></div>
         </div>
       `).join('')}
     </div>
@@ -757,17 +756,80 @@ async function renderKanban() {
 
   document.getElementById('btn-new-project').addEventListener('click', () => showProjectModal());
 
-  // Drag and drop
+  let soloRiesgo = false;
   let dragging = null;
 
-  main.querySelectorAll('.kanban-card').forEach(card => {
-    card.addEventListener('dragstart', () => { dragging = card; card.classList.add('dragging'); });
-    card.addEventListener('dragend', () => { dragging = null; card.classList.remove('dragging'); });
-    card.addEventListener('click', () => navigate('project-detail', { id: card.dataset.id }));
-  });
+  function kanbanCardHtml(p) {
+    const salud = calcSalud(p);
+    const alerta = (salud.level === 'red' || salud.level === 'yellow')
+      ? `<span class="kanban-salud kanban-salud-${salud.level}">${escHtml(salud.titulo)}</span>` : '';
+    const tecs = p.tecnicos ? p.tecnicos.split(',').map(t => t.trim()).filter(Boolean) : [];
+    return `
+      <div class="kanban-card" draggable="true" data-id="${p.id}" data-estado="${p.estado}">
+        <div class="kanban-card-title">
+          <span class="semaforo semaforo-${salud.level}" style="margin-right:7px" title="${escHtml(salud.detalle)}"></span>
+          ${escHtml(p.nombre)}
+        </div>
+        <div class="kanban-card-meta">
+          ${badgePrio(p.prioridad)}
+          ${alerta}
+          ${!p.cuenta_horas ? '<span class="no-cuenta-badge">sin cómputo</span>' : ''}
+        </div>
+        ${tecs.length ? `<div class="kanban-card-tecs">${tecs.map(t => `<span class="kanban-tec">${escHtml(t)}</span>`).join('')}</div>` : ''}
+      </div>
+    `;
+  }
 
+  function applyFilters() {
+    const search    = document.getElementById('kf-search')?.value.toLowerCase().trim() || '';
+    const prioridad = document.getElementById('kf-prioridad')?.value || '';
+    const tecnicoId = document.getElementById('kf-tecnico')?.value || '';
+    const tecnicoNombre = tecnicoId ? (resources.find(r => String(r.id) === tecnicoId)?.nombre || '') : '';
+    const hasFilter = search || prioridad || tecnicoId || soloRiesgo;
+
+    document.getElementById('kf-clear').style.display = hasFilter ? '' : 'none';
+    document.getElementById('kf-riesgo').classList.toggle('btn-primary', soloRiesgo);
+    document.getElementById('kf-riesgo').classList.toggle('btn-ghost', !soloRiesgo);
+
+    columns.forEach(col => {
+      let visible = projects.filter(p => p.estado === col);
+
+      if (search)     visible = visible.filter(p => p.nombre.toLowerCase().includes(search));
+      if (prioridad)  visible = visible.filter(p => p.prioridad === prioridad);
+      if (tecnicoNombre) {
+        visible = visible.filter(p => {
+          const tecs = p.tecnicos ? p.tecnicos.split(',').map(t => t.trim()) : [];
+          return tecs.some(t => t.toLowerCase() === tecnicoNombre.toLowerCase());
+        });
+      }
+      if (soloRiesgo) {
+        visible = visible.filter(p => {
+          const s = calcSalud(p);
+          return s.level === 'red' || s.level === 'yellow';
+        });
+      }
+
+      const container = main.querySelector(`.kanban-cards[data-estado="${col}"]`);
+      const countEl   = main.querySelector(`.kanban-col-count[data-col="${col}"]`);
+      if (container) container.innerHTML = visible.map(kanbanCardHtml).join('');
+      if (countEl)   countEl.textContent = visible.length;
+
+      wireCards(container);
+    });
+  }
+
+  function wireCards(container) {
+    (container ? container.querySelectorAll('.kanban-card') : main.querySelectorAll('.kanban-card'))
+      .forEach(card => {
+        card.addEventListener('dragstart', () => { dragging = card; card.classList.add('dragging'); });
+        card.addEventListener('dragend',   () => { dragging = null; card.classList.remove('dragging'); });
+        card.addEventListener('click',     () => navigate('project-detail', { id: card.dataset.id }));
+      });
+  }
+
+  // Column drag-over / drop (event delegation on columns)
   main.querySelectorAll('.kanban-col').forEach(col => {
-    col.addEventListener('dragover', e => { e.preventDefault(); col.classList.add('drag-over'); });
+    col.addEventListener('dragover',  e => { e.preventDefault(); col.classList.add('drag-over'); });
     col.addEventListener('dragleave', () => col.classList.remove('drag-over'));
     col.addEventListener('drop', async (e) => {
       e.preventDefault();
@@ -783,6 +845,24 @@ async function renderKanban() {
       } catch (err) { toast(err.message, 'error'); }
     });
   });
+
+  // Filter events
+  ['kf-search','kf-prioridad','kf-tecnico'].forEach(id =>
+    document.getElementById(id)?.addEventListener('input', applyFilters)
+  );
+  document.getElementById('kf-riesgo').addEventListener('click', () => {
+    soloRiesgo = !soloRiesgo;
+    applyFilters();
+  });
+  document.getElementById('kf-clear').addEventListener('click', () => {
+    document.getElementById('kf-search').value = '';
+    document.getElementById('kf-prioridad').value = '';
+    document.getElementById('kf-tecnico').value = '';
+    soloRiesgo = false;
+    applyFilters();
+  });
+
+  applyFilters();
 }
 
 // ── ③ Project detail ──────────────────────────────────────
