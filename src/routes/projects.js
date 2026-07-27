@@ -129,8 +129,8 @@ router.get('/resumen-horas', (req, res) => {
 
 // POST /api/projects/:id/ai-summary
 router.post('/:id/ai-summary', async (req, res) => {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return res.status(503).json({ error: 'GEMINI_API_KEY no configurado en el servidor' });
+  const key = process.env.GROQ_API_KEY;
+  if (!key) return res.status(503).json({ error: 'GROQ_API_KEY no configurado en el servidor' });
 
   try {
     const db = getDb();
@@ -182,21 +182,22 @@ ${context}
 Actividad reciente (más reciente primero):
 ${lines}`;
 
-    const apiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { maxOutputTokens: 300 },
-        }),
-      }
-    );
+    const apiRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'llama-3.1-8b-instant',
+        max_tokens: 300,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
 
     const data = await apiRes.json();
-    if (!apiRes.ok) throw new Error(data.error?.message || `Gemini API ${apiRes.status}`);
-    const summary = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || 'No se pudo generar resumen.';
+    if (!apiRes.ok) throw new Error(data.error?.message || `Groq API ${apiRes.status}`);
+    const summary = data.choices?.[0]?.message?.content?.trim() || 'No se pudo generar resumen.';
 
     res.json({ summary });
   } catch (err) {
