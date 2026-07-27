@@ -261,6 +261,17 @@ async function fetchWeekActivity(db, fromStr, toStr, token) {
 
   db.prepare('DELETE FROM weekly_activity WHERE week_start=?').run(fromStr);
 
+  // Remove estimated time_entries whose source comment was just deleted (orphans).
+  // This allows the estimator to re-process them with the refreshed full text.
+  db.prepare(`
+    DELETE FROM time_entries
+    WHERE tipo='estimado'
+      AND source_comment_id IS NOT NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM weekly_activity wa WHERE wa.id = time_entries.source_comment_id
+      )
+  `).run();
+
   const insert = db.prepare(`
     INSERT INTO weekly_activity (project_id, week_start, event_type, event_at, actor, detail)
     VALUES (@project_id, @week_start, @event_type, @event_at, @actor, @detail)
@@ -281,7 +292,7 @@ async function fetchWeekActivity(db, fromStr, toStr, token) {
           event_type: 'comment',
           event_at:   new Date(ts).toISOString().replace('T', ' ').replace(/\.\d+Z$/, ''),
           actor:      c.user?.username || c.user?.email || 'Desconocido',
-          detail:     text.length > 400 ? text.slice(0, 397) + '...' : text,
+          detail:     text.length > 4000 ? text.slice(0, 3997) + '...' : text,
         });
       }
       await sleep(120);
