@@ -51,6 +51,30 @@ El nav incluye un selector de tema persistido en `localStorage`:
 | ☀ Flat | Diseño plano, fondo claro, sidebar azul |
 | ◉ Neu | Neumorphism, sombras suaves extruidas/hundidas |
 
+## Vista Kanban
+
+- **Filtros**: búsqueda por texto, prioridad, técnico asignado, toggle "solo en riesgo"
+- **Columnas configurables**: botón ⚙ Columnas para agregar, quitar y reordenar columnas con colores personalizados; configuración persiste en `localStorage`
+- **Fecha de vencimiento** en cada card: gris / amarillo (≤5 días) / rojo (vencido)
+- **Técnicos** asignados como chips en la parte inferior de cada card
+- **Drag & drop** para mover proyectos entre columnas
+
+## Vista Carga
+
+- **Cards de recursos** con avatar de iniciales, tag de carga (Sin carga / Normal / Ocupado / Sobrecarga) y barra de participación en horas totales
+- **CRUD de recursos**: botón ＋ Recurso para crear, ✏ para editar, 🗑 para eliminar (con confirmación)
+- **Reasignación por drag & drop**: arrastrás un proyecto de una card y lo soltás en otra para reasignarlo
+
+## Vista Gantt
+
+- Barras horizontales por proyecto entre `fecha_inicio` y `fecha_fin_est`
+- Coloreadas según semáforo de salud (verde / amarillo / rojo / gris)
+- Borde punteado si no tiene fecha de inicio cargada
+- Escala adaptativa (6–32 px/día según rango total)
+- Línea roja de hoy; el chart abre centrado en la fecha actual
+- Columna de nombre sticky al hacer scroll horizontal
+- Filtros: búsqueda + estado
+
 ## Sync con ClickUp
 
 - **Manual**: Configuración → "Sync ahora" o `POST /api/sync/clickup`
