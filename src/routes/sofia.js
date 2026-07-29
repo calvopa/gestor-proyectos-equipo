@@ -84,7 +84,7 @@ router.get('/projects', (req, res) => {
   try {
     const db = getDb();
     const projects = db.prepare(`
-      SELECT p.nombre, p.estado, p.prioridad, p.riesgo,
+      SELECT p.nombre, p.estado, p.prioridad,
              p.fecha_fin_est, p.last_comment_text, p.last_comment_by,
              p.last_comment_at, p.ai_summary,
              COALESCE(SUM(te.duracion_seg), 0) AS seg_total,
@@ -114,7 +114,7 @@ router.get('/projects', (req, res) => {
         : 'sin fecha';
 
       let linea = `• [${p.estado.toUpperCase()}] ${p.nombre}`;
-      linea += ` | Prioridad: ${p.prioridad} | Riesgo: ${p.riesgo || 'bajo'}`;
+      linea += ` | Prioridad: ${p.prioridad}`;
       linea += ` | ${venceStr} | Horas registradas: ${horas}h | Recursos: ${p.recursos}`;
       if (p.last_comment_text) {
         const snippet = p.last_comment_text.slice(0, 120).replace(/\n/g, ' ');
