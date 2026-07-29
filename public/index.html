@@ -76,7 +76,13 @@
         <span class="sofia-msg-text">Hola! Soy Sofia. Puedo ayudarte con proyectos, reportes o consultas del gestor. ¿En qué te ayudo?</span>
       </div>
     </div>
+    <div id="sofia-context-bar" class="sofia-context-bar"></div>
+    <div id="sofia-toolbar" class="sofia-toolbar">
+      <button id="sofia-btn-attach" class="sofia-toolbar-btn" title="Adjuntar archivo">📎</button>
+      <button id="sofia-btn-projects" class="sofia-toolbar-btn" title="Estado de proyectos">📊</button>
+    </div>
     <div class="sofia-input-area">
+      <input type="file" id="sofia-file-input" accept=".pdf,.txt,.md,.csv,.json,.yaml,.yml,.xml" style="display:none">
       <textarea id="sofia-input" placeholder="Escribí tu mensaje..." rows="1" autocomplete="off"></textarea>
       <button id="sofia-send" title="Enviar">▶</button>
     </div>

@@ -68,9 +68,12 @@ const api = {
     api._fetch('/api/semana/ai-summary', { method: 'POST', body: { project_id: projectId, week_start: weekStart } }),
 
   // Sofia (OpenClaw)
-  sofiaChat: (message, sessionKey) =>
-    api._fetch('/api/sofia/chat', { method: 'POST', body: { message, sessionId: sessionKey } }),
+  sofiaChat: (message, sessionKey, contexts) =>
+    api._fetch('/api/sofia/chat', { method: 'POST', body: { message, sessionId: sessionKey, contexts } }),
   sofiaClear: (sessionKey) =>
     api._fetch('/api/sofia/chat', { method: 'DELETE', body: { sessionId: sessionKey } }),
+  sofiaProjects: () => api._fetch('/api/sofia/projects'),
+  sofiaParseFile: (filename, mimeType, data) =>
+    api._fetch('/api/sofia/parse-file', { method: 'POST', body: { filename, mimeType, data } }),
   sofiaStatus: () => api._fetch('/api/sofia/status'),
 };
