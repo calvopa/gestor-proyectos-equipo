@@ -66,4 +66,11 @@ const api = {
     api._fetch(`/api/semana?from=${from}&to=${to}${refresh ? '&refresh=1' : ''}`),
   getSemanaAiSummary: (projectId, weekStart) =>
     api._fetch('/api/semana/ai-summary', { method: 'POST', body: { project_id: projectId, week_start: weekStart } }),
+
+  // Sofia (OpenClaw)
+  sofiaChat: (message, sessionKey) =>
+    api._fetch('/api/sofia/chat', { method: 'POST', body: { message, sessionId: sessionKey } }),
+  sofiaClear: (sessionKey) =>
+    api._fetch('/api/sofia/chat', { method: 'DELETE', body: { sessionId: sessionKey } }),
+  sofiaStatus: () => api._fetch('/api/sofia/status'),
 };

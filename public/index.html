@@ -49,8 +49,42 @@
 
   <div id="toast-container"></div>
 
+  <!-- Sofia Chat Widget -->
+  <button id="sofia-fab" title="Hablar con Sofia" aria-label="Abrir chat Sofia">
+    <span class="sofia-fab-icon">✦</span>
+  </button>
+
+  <div id="sofia-panel" class="sofia-panel" aria-hidden="true">
+    <div class="sofia-header">
+      <div class="sofia-header-info">
+        <span class="sofia-avatar">✦</span>
+        <div>
+          <div class="sofia-name">Sofia</div>
+          <div class="sofia-status-line">
+            <span id="sofia-status-indicator" class="sofia-dot sofia-dot-gray"></span>
+            <span id="sofia-status-text">Conectando...</span>
+          </div>
+        </div>
+      </div>
+      <div class="sofia-header-actions">
+        <button id="sofia-clear" title="Nueva conversación" class="sofia-icon-btn">↺</button>
+        <button id="sofia-close" title="Cerrar" class="sofia-icon-btn">✕</button>
+      </div>
+    </div>
+    <div id="sofia-messages" class="sofia-messages">
+      <div class="sofia-msg sofia-msg-bot">
+        <span class="sofia-msg-text">Hola! Soy Sofia. Puedo ayudarte con proyectos, reportes o consultas del gestor. ¿En qué te ayudo?</span>
+      </div>
+    </div>
+    <div class="sofia-input-area">
+      <textarea id="sofia-input" placeholder="Escribí tu mensaje..." rows="1" autocomplete="off"></textarea>
+      <button id="sofia-send" title="Enviar">▶</button>
+    </div>
+  </div>
+
   <script src="/js/api.js"></script>
   <script src="/js/app.js"></script>
   <script src="/js/semana.js"></script>
+  <script src="/js/sofia.js"></script>
 </body>
 </html>

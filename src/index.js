@@ -21,6 +21,7 @@ app.use('/api/alerts', require('./routes/alerts'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/semana',    require('./routes/semana'));
 app.use('/api/export',   require('./routes/export'));
+app.use('/api/sofia',    require('./routes/sofia'));
 
 app.get('/health', (req, res) => res.json({ ok: true }));
 

@@ -6,6 +6,8 @@ services:
       - "${PORT:-3000}:${PORT:-3000}"
     volumes:
       - gestor-data:/data
+      - /home/alteor/.ssh/id_gestor:/root/.ssh/id_gestor:ro
+      - /home/alteor/.ssh/known_hosts:/root/.ssh/known_hosts:ro
     environment:
       - PORT=${PORT:-3000}
       - DB_PATH=/data/gestor.sqlite
@@ -13,6 +15,8 @@ services:
       - CLICKUP_TEAM_ID=${CLICKUP_TEAM_ID:-}
       - SYNC_INTERVAL_MIN=${SYNC_INTERVAL_MIN:-30}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - OPENCLAW_SSH_HOST=alteor@192.168.1.38
+      - OPENCLAW_SSH_KEY=/root/.ssh/id_gestor
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:${PORT:-3000}/health"]
       interval: 30s
