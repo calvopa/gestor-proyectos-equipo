@@ -59,7 +59,7 @@ router.post('/chat', (req, res) => {
   const fullPrompt = buildPrompt(history, message, contexts);
 
   const escaped = fullPrompt.replace(/'/g, "'\\''");
-  const remoteCmd = `openclaw agent --agent main --session-key '${sessionKey}' --message '${escaped}' --json`;
+  const remoteCmd = `openclaw agent --agent main --message '${escaped}' --json`;
 
   execFile('ssh', sshArgs(remoteCmd), { timeout: 120000 }, (err, stdout) => {
     if (err) {
