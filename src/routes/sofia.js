@@ -5,7 +5,8 @@ const { getDb } = require('../db');
 
 const OPENCLAW_SSH_HOST = process.env.OPENCLAW_SSH_HOST || 'openclaw';
 const OPENCLAW_SSH_KEY  = process.env.OPENCLAW_SSH_KEY  || null;
-const MAX_HISTORY = 10;
+const MAX_HISTORY = 4;
+const MAX_PROMPT_CHARS = 4000;
 
 function sshArgs(remoteCmd) {
   const args = [];
@@ -27,7 +28,8 @@ function buildPrompt(history, message, contexts) {
 
   if (contexts?.length) {
     parts.push('=== CONTEXTO ADICIONAL ===');
-    contexts.forEach(c => parts.push(c));
+    // Truncate each context block to avoid overflow
+    contexts.forEach(c => parts.push(c.slice(0, 2000)));
     parts.push('=== FIN CONTEXTO ===\n');
   }
 
@@ -39,7 +41,12 @@ function buildPrompt(history, message, contexts) {
   }
 
   parts.push(`Usuario: ${message}`);
-  return parts.join('\n');
+  const result = parts.join('\n');
+
+  if (result.length > MAX_PROMPT_CHARS) {
+    return result.slice(0, MAX_PROMPT_CHARS) + '\n[...contexto recortado por longitud...]';
+  }
+  return result;
 }
 
 // ── POST /api/sofia/chat ──────────────────────────────────
@@ -117,8 +124,8 @@ router.get('/projects', (req, res) => {
       linea += ` | Prioridad: ${p.prioridad}`;
       linea += ` | ${venceStr} | Horas registradas: ${horas}h | Recursos: ${p.recursos}`;
       if (p.last_comment_text) {
-        const snippet = p.last_comment_text.slice(0, 120).replace(/\n/g, ' ');
-        linea += `\n  Último comentario (${p.last_comment_by || 'N/A'}): "${snippet}"`;
+        const snippet = p.last_comment_text.slice(0, 60).replace(/\n/g, ' ');
+        linea += ` | Último comentario (${p.last_comment_by || 'N/A'}): "${snippet}"`;
       }
       return linea;
     });
