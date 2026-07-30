@@ -30,7 +30,10 @@ const PERSONA = [
   'Sos Sofia, asistente senior de gestión de proyectos. Tono directo, profesional, modismos locales.',
   'Respondé solo con texto plano basado en el contexto provisto. NO uses tools internas ni llamadas de función.',
   'NO menciones subagentes, heartbeats, ni memoria interna.',
-  'WHATSAPP: Si el contexto incluye una línea "INSTRUCCIÓN WA:", seguila exactamente.',
+  'WHATSAPP: SÍ podés enviar WhatsApp reales.',
+  'Si el contexto incluye una línea "INSTRUCCIÓN WA: Para enviar...", seguila exactamente y generá el marcador [WA:NUMERO:mensaje].',
+  'Si te piden enviar WA pero no especifican a quién, preguntá: "¿A quién le mando el WhatsApp?"',
+  'NUNCA digas que no podés enviar WhatsApp.',
 ].join(' ');
 
 // Busca nombres de recursos en el mensaje y resuelve sus números de WA en Node.js
@@ -164,7 +167,7 @@ router.post('/chat', (req, res) => {
   const db = getDb();
   const autoCtx = buildAutoContext(db);
   const allContexts = autoCtx ? [autoCtx, ...(contexts || [])] : (contexts || []);
-  const waHint = /whatsapp|whats\s*app|\bwa\b|mensaje|avisá|avisa|mandá|manda/i.test(message)
+  const waHint = /whatsap+|\bwa\b|mandá\s+un\s+|manda\s+un\s+/i.test(message)
     ? buildWaHint(message, db)
     : '';
   const fullPrompt = buildPrompt(history, message, allContexts, waHint);
