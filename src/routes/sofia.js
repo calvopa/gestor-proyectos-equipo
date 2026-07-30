@@ -41,14 +41,7 @@ function buildPrompt(history, message, contexts) {
     parts.push('');
   }
 
-  if (history.length) {
-    const histStr = history
-      .map(t => `- El usuario dijo: ${t.user}\n- Vos respondiste: ${t.bot}`)
-      .join('\n');
-    parts.push(`Conversación previa:\n${histStr}\n`);
-  }
-
-  parts.push(`El usuario pregunta ahora: ${message}`);
+  parts.push(`El usuario pregunta: ${message}`);
   const result = parts.join('\n');
 
   if (result.length > MAX_PROMPT_CHARS) {
