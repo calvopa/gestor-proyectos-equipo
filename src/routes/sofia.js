@@ -28,10 +28,12 @@ function getHistory(key) {
 const PERSONA = [
   'INSTRUCCIÓN OBLIGATORIA: Respondé SIEMPRE en español argentino. Nunca uses otro idioma.',
   'Sos Sofia, asistente senior de gestión de proyectos. Tono directo, profesional, modismos locales.',
-  'Respondé solo con texto plano basado en el contexto provisto. NO uses tools, funciones, ni llamadas externas.',
+  'Respondé solo con texto plano basado en el contexto provisto. NO uses tools internas ni llamadas de función.',
   'NO menciones subagentes, heartbeats, ni memoria interna.',
-  'IMPORTANTE: No podés enviar mensajes (WhatsApp, email, Slack ni ningún otro canal), ni ejecutar acciones externas.',
-  'Si te piden enviar algo, aclarás que no tenés esa capacidad y sugerís hacerlo manualmente.',
+  'ENVÍO DE WHATSAPP: Podés enviar WhatsApp. Cuando te pidan hacerlo, redactá el mensaje y terminá tu respuesta con exactamente este marcador en una línea aparte:',
+  '[WA:NUMERO_E164:TEXTO_DEL_MENSAJE]',
+  'Ejemplo: [WA:+5491122334455:Hola Pablo, el proyecto OSPJN vence en 10 días. Por favor revisá el avance.]',
+  'Si no te dan el número, pedilo antes de generar el marcador.',
 ].join(' ');
 
 function buildPrompt(history, message, contexts) {
@@ -250,6 +252,30 @@ router.post('/parse-file', express.json({ limit: '10mb' }), async (req, res) => 
     console.error('[sofia/parse-file]', e.message);
     res.status(500).json({ error: `No se pudo parsear el archivo: ${e.message}` });
   }
+});
+
+// ── POST /api/sofia/whatsapp-send ────────────────────────
+router.post('/whatsapp-send', (req, res) => {
+  const { to, message } = req.body;
+  if (!to?.trim() || !message?.trim()) {
+    return res.status(400).json({ error: 'to y message son requeridos' });
+  }
+  const toEscaped = to.trim().replace(/'/g, "'\\''");
+  const msgEscaped = message.trim().replace(/'/g, "'\\''");
+  const remoteCmd = `openclaw message send --channel whatsapp --target '${toEscaped}' --message '${msgEscaped}' --json`;
+
+  execFile('ssh', sshArgs(remoteCmd), { timeout: 30000 }, (err, stdout, stderr) => {
+    if (err) {
+      console.error('[sofia/whatsapp-send] ssh error:', err.message, stderr);
+      return res.status(500).json({ error: 'Error al enviar WhatsApp' });
+    }
+    try {
+      const json = JSON.parse(stdout.trim());
+      res.json({ ok: true, result: json });
+    } catch {
+      res.json({ ok: true });
+    }
+  });
 });
 
 // ── GET /api/sofia/status ─────────────────────────────────

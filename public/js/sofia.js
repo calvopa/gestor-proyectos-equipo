@@ -160,6 +160,46 @@
   });
   sendBtn.addEventListener('click', sendMessage);
 
+  // ── WhatsApp marker parser ────────────────────────────────
+  const WA_RE = /\[WA:([+\d]+):(.+?)\]$/ms;
+
+  function parseWaMarker(text) {
+    const m = text.match(WA_RE);
+    if (!m) return { clean: text, wa: null };
+    return {
+      clean: text.replace(WA_RE, '').trimEnd(),
+      wa: { to: m[1].trim(), message: m[2].trim() },
+    };
+  }
+
+  function addWaConfirm(to, message) {
+    const div = document.createElement('div');
+    div.className = 'sofia-msg sofia-msg-bot sofia-wa-confirm';
+    div.innerHTML = `
+      <span class="sofia-msg-text">
+        📱 <strong>WhatsApp listo para enviar</strong><br>
+        <small>Para: ${to}</small><br>
+        <em>${message.slice(0, 120)}${message.length > 120 ? '…' : ''}</em>
+      </span>
+      <button class="sofia-wa-btn sofia-wa-send">Enviar ✓</button>
+      <button class="sofia-wa-btn sofia-wa-cancel">Cancelar</button>`;
+    div.querySelector('.sofia-wa-send').addEventListener('click', async () => {
+      div.querySelector('.sofia-wa-send').disabled = true;
+      div.querySelector('.sofia-wa-cancel').disabled = true;
+      try {
+        await api.sofiaWhatsappSend(to, message);
+        div.querySelector('.sofia-msg-text').innerHTML += '<br><strong>✅ Enviado</strong>';
+      } catch (e) {
+        div.querySelector('.sofia-msg-text').innerHTML += `<br><strong>❌ Error: ${e.message}</strong>`;
+      }
+      div.querySelector('.sofia-wa-send').remove();
+      div.querySelector('.sofia-wa-cancel')?.remove();
+    });
+    div.querySelector('.sofia-wa-cancel').addEventListener('click', () => div.remove());
+    msgs.appendChild(div);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
   // ── Message bubbles ───────────────────────────────────────
   function addMessage(text, role) {
     const div = document.createElement('div');
@@ -203,7 +243,9 @@
       const res = await api.sofiaChat(text, sessionId, contexts.length ? contexts : undefined);
       typing.remove();
       if (res.sessionKey) sessionId = res.sessionKey;
-      addMessage(res.text || '(sin respuesta)', 'bot');
+      const { clean, wa } = parseWaMarker(res.text || '');
+      if (clean) addMessage(clean, 'bot');
+      if (wa) addWaConfirm(wa.to, wa.message);
     } catch {
       typing.remove();
       addMessage('Error al comunicarme con Sofia. Verificá la conexión.', 'bot sofia-msg-error');

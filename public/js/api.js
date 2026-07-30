@@ -76,4 +76,6 @@ const api = {
   sofiaParseFile: (filename, mimeType, data) =>
     api._fetch('/api/sofia/parse-file', { method: 'POST', body: { filename, mimeType, data } }),
   sofiaStatus: () => api._fetch('/api/sofia/status'),
+  sofiaWhatsappSend: (to, message) =>
+    api._fetch('/api/sofia/whatsapp-send', { method: 'POST', body: { to, message } }),
 };
