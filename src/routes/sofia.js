@@ -69,7 +69,14 @@ function buildPrompt(history, message, contexts, waHint) {
     parts.push('');
   }
 
-  parts.push(`El usuario pregunta: ${message}`);
+  // Último turno de historial para dar continuidad en flujos multi-mensaje
+  if (history.length > 0) {
+    const last = history[history.length - 1];
+    parts.push(`Turno anterior — Usuario: "${last.user.slice(0, 100)}" | Sofia: "${last.bot.slice(0, 200)}"`);
+    parts.push('');
+  }
+
+  parts.push(`El usuario responde: ${message}`);
   const result = parts.join('\n');
 
   if (result.length > MAX_PROMPT_CHARS) {
@@ -167,8 +174,13 @@ router.post('/chat', (req, res) => {
   const db = getDb();
   const autoCtx = buildAutoContext(db);
   const allContexts = autoCtx ? [autoCtx, ...(contexts || [])] : (contexts || []);
-  const waHint = /whatsap+|\bwa\b|mandá\s+un\s+|manda\s+un\s+/i.test(message)
-    ? buildWaHint(message, db)
+  const lastBotMsg = history.length > 0 ? history[history.length - 1].bot : '';
+  const isWaFlow = /whatsap+|\bwhat?s?a?p?\b|enviar?\s+mensaj|mandá?\s+un/i.test(message)
+    || /quién le mando|a quién/i.test(lastBotMsg);
+  // En flujo WA, también buscar nombres en el turno anterior del usuario
+  const prevUserMsg = history.length > 0 ? history[history.length - 1].user : '';
+  const waHint = isWaFlow
+    ? (buildWaHint(message, db) || buildWaHint(prevUserMsg, db))
     : '';
   const fullPrompt = buildPrompt(history, message, allContexts, waHint);
 
