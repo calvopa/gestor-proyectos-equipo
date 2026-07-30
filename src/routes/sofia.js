@@ -37,8 +37,32 @@ const PERSONA = [
   'NUNCA uses el número de otra persona ni inventes uno.',
 ].join(' ');
 
-function buildPrompt(history, message, contexts) {
+// Busca nombres de recursos en el mensaje y resuelve sus números de WA en Node.js
+// para no depender de que el LLM haga el lookup correctamente.
+function buildWaHint(message, db) {
+  const resources = db.prepare('SELECT nombre, telefono FROM resources WHERE activo=1').all();
+  const hints = [];
+  const msgLower = message.toLowerCase();
+  for (const r of resources) {
+    const firstName = r.nombre.split(' ')[0].toLowerCase();
+    if (msgLower.includes(r.nombre.toLowerCase()) || msgLower.includes(firstName)) {
+      if (r.telefono) {
+        hints.push(`INSTRUCCIÓN WA: Para enviar WhatsApp a ${r.nombre} usá EXACTAMENTE este número: ${r.telefono}. Generá el marcador [WA:${r.telefono}:mensaje aquí].`);
+      } else {
+        hints.push(`INSTRUCCIÓN WA: ${r.nombre} no tiene número registrado. Respondé solo: "No tengo el número de ${r.nombre}. ¿Me lo pasás?"`);
+      }
+    }
+  }
+  return hints.join('\n');
+}
+
+function buildPrompt(history, message, contexts, waHint) {
   const parts = [PERSONA];
+
+  if (waHint) {
+    parts.push(waHint);
+    parts.push('');
+  }
 
   if (contexts?.length) {
     parts.push('Información de contexto:');
@@ -155,7 +179,10 @@ router.post('/chat', (req, res) => {
   const db = getDb();
   const autoCtx = buildAutoContext(db);
   const allContexts = autoCtx ? [autoCtx, ...(contexts || [])] : (contexts || []);
-  const fullPrompt = buildPrompt(history, message, allContexts);
+  const waHint = /whatsapp|whats\s*app|\bwa\b|mensaje|avisá|avisa|mandá|manda/i.test(message)
+    ? buildWaHint(message, db)
+    : '';
+  const fullPrompt = buildPrompt(history, message, allContexts, waHint);
 
   const escaped = fullPrompt.replace(/'/g, "'\\''");
   const ephemeralKey = randomUUID();
