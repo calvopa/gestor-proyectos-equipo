@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { execFile } = require('child_process');
+const { randomUUID } = require('crypto');
 const { getDb } = require('../db');
 
 const OPENCLAW_SSH_HOST = process.env.OPENCLAW_SSH_HOST || 'openclaw';
@@ -141,7 +142,8 @@ router.post('/chat', (req, res) => {
   const fullPrompt = buildPrompt(history, message, allContexts);
 
   const escaped = fullPrompt.replace(/'/g, "'\\''");
-  const remoteCmd = `openclaw agent --agent main --message '${escaped}' --json`;
+  const ephemeralKey = randomUUID();
+  const remoteCmd = `openclaw agent --agent main --session-key '${ephemeralKey}' --message '${escaped}' --json`;
 
   execFile('ssh', sshArgs(remoteCmd), { timeout: 120000 }, (err, stdout) => {
     if (err) {
