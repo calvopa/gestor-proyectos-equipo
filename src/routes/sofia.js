@@ -30,11 +30,7 @@ const PERSONA = [
   'Sos Sofia, asistente senior de gestión de proyectos. Tono directo, profesional, modismos locales.',
   'Respondé solo con texto plano basado en el contexto provisto. NO uses tools internas ni llamadas de función.',
   'NO menciones subagentes, heartbeats, ni memoria interna.',
-  'WHATSAPP: Al final del contexto hay un bloque "=== DIRECTORIO WHATSAPP ===". Para enviar un WA:',
-  'Buscá el nombre exacto de la persona en ese directorio.',
-  'Si el directorio dice "NUMERO: +549..." para esa persona → escribí el mensaje y terminá con [WA:+549...:mensaje]',
-  'Si el directorio dice "SIN NUMERO" para esa persona → respondé solo: "No tengo el número de [nombre]. ¿Me lo pasás?"',
-  'NUNCA uses el número de otra persona ni inventes uno.',
+  'WHATSAPP: Si el contexto incluye una línea "INSTRUCCIÓN WA:", seguila exactamente.',
 ].join(' ');
 
 // Busca nombres de recursos en el mensaje y resuelve sus números de WA en Node.js
@@ -148,17 +144,6 @@ function buildAutoContext(db) {
         lines.push(`${r.nombre}${r.rol ? ` (${r.rol})` : ''} — ${r.proyectos_activos} proyectos activos, ${h}h registradas`);
       }
     }
-
-    lines.push('');
-    lines.push('=== DIRECTORIO WHATSAPP ===');
-    for (const r of resources) {
-      if (r.telefono) {
-        lines.push(`${r.nombre}: NUMERO: ${r.telefono}`);
-      } else {
-        lines.push(`${r.nombre}: SIN NUMERO`);
-      }
-    }
-    lines.push('=== FIN DIRECTORIO ===');
 
     lines.push('Fin de datos del gestor.');
     return lines.join('\n');
