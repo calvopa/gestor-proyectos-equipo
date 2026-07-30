@@ -150,7 +150,7 @@ router.post('/chat', (req, res) => {
 
   const escaped = fullPrompt.replace(/'/g, "'\\''");
   const ephemeralKey = randomUUID();
-  const remoteCmd = `openclaw agent --agent main --model ollama/gemma2:9b --session-key '${ephemeralKey}' --message '${escaped}' --json`;
+  const remoteCmd = `openclaw agent --agent sofia --session-key '${ephemeralKey}' --message '${escaped}' --json`;
 
   execFile('ssh', sshArgs(remoteCmd), { timeout: 120000 }, (err, stdout) => {
     if (err) {
