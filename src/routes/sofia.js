@@ -19,10 +19,23 @@ function sshArgs(remoteCmd) {
 
 // In-memory conversation history keyed by sessionKey
 const histories = new Map();
+// Estado de flujo WA por sesión: { wantWa, personName, telefono }
+const waFlows = new Map();
 
 function getHistory(key) {
   if (!histories.has(key)) histories.set(key, []);
   return histories.get(key);
+}
+
+function detectWaTargetInText(text, resources) {
+  const lower = text.toLowerCase();
+  for (const r of resources) {
+    const parts = r.nombre.toLowerCase().split(' ');
+    if (parts.some(p => p.length > 2 && lower.includes(p))) {
+      return r;
+    }
+  }
+  return null;
 }
 
 const PERSONA = [
@@ -57,8 +70,13 @@ function resolveWaMarkers(text, db) {
   });
 }
 
-function buildPrompt(history, message, contexts) {
+function buildPrompt(history, message, contexts, waInstruction) {
   const parts = [PERSONA];
+
+  if (waInstruction) {
+    parts.push(waInstruction);
+    parts.push('');
+  }
 
   if (contexts?.length) {
     parts.push('Información de contexto:');
@@ -169,9 +187,39 @@ router.post('/chat', (req, res) => {
   const history = getHistory(sessionKey);
 
   const db = getDb();
+  const resources = db.prepare('SELECT nombre, telefono FROM resources WHERE activo=1').all();
+
+  // ── Rastrear estado WA de la sesión ─────────────────────
+  const waFlow = waFlows.get(sessionKey) || {};
+  const isWaMention = /whatsap+/i.test(message);
+
+  if (isWaMention) waFlow.wantWa = true;
+
+  // Buscar nombre del destinatario en el mensaje actual o en el historial
+  if (waFlow.wantWa && !waFlow.personName) {
+    const allTexts = [message, ...history.map(h => h.user)];
+    for (const txt of allTexts) {
+      const found = detectWaTargetInText(txt, resources);
+      if (found) { waFlow.personName = found.nombre; waFlow.telefono = found.telefono; break; }
+    }
+  }
+  waFlows.set(sessionKey, waFlow);
+
+  // Construir instrucción WA para el prompt
+  let waInstruction = '';
+  if (waFlow.wantWa) {
+    if (waFlow.personName && waFlow.telefono) {
+      waInstruction = `INSTRUCCIÓN OBLIGATORIA: El usuario quiere enviar un WhatsApp a ${waFlow.personName}. Redactá el mensaje y terminá tu respuesta con el marcador: [WA:${waFlow.personName}:texto del mensaje]`;
+    } else if (waFlow.personName) {
+      waInstruction = `INSTRUCCIÓN: El usuario quiere enviar WhatsApp a ${waFlow.personName} pero no hay número registrado. Respondé: "No tengo el número de ${waFlow.personName}. Cargalo en Recursos para poder enviarlo."`;
+    } else {
+      waInstruction = 'INSTRUCCIÓN: El usuario quiere enviar un WhatsApp pero no especificó a quién. Preguntá exactamente: "¿A quién le mando el WhatsApp?"';
+    }
+  }
+
   const autoCtx = buildAutoContext(db);
   const allContexts = autoCtx ? [autoCtx, ...(contexts || [])] : (contexts || []);
-  const fullPrompt = buildPrompt(history, message, allContexts);
+  const fullPrompt = buildPrompt(history, message, allContexts, waInstruction);
 
   const escaped = fullPrompt.replace(/'/g, "'\\''");
   const ephemeralKey = randomUUID();
@@ -187,9 +235,13 @@ router.post('/chat', (req, res) => {
       let text = json.result?.payloads?.[0]?.text ?? '';
       // Resolver nombres en marcadores WA → números E.164 desde la DB
       text = resolveWaMarkers(text, db);
-      // Convertir WA_NONUM en aviso legible
-      text = text.replace(/\[WA_NONUM:([^\]:]+):[^\]]+\]/g,
-        (_, nombre) => `(No tengo el número de WhatsApp de ${nombre}. Cargalo en Recursos para poder enviarlo.)`);
+      // Si se generó un marcador WA válido, limpiar el flujo WA de la sesión
+      if (/\[WA:\+\d+:[^\]]+\]/.test(text)) waFlows.delete(sessionKey);
+      // Convertir WA_NONUM en aviso legible y limpiar flujo
+      text = text.replace(/\[WA_NONUM:([^\]:]+):[^\]]+\]/g, (_, nombre) => {
+        waFlows.delete(sessionKey);
+        return `(No tengo el número de WhatsApp de ${nombre}. Cargalo en Recursos para poder enviarlo.)`;
+      });
       history.push({ user: message, bot: text.slice(0, MAX_BOT_HISTORY_CHARS) });
       if (history.length > MAX_HISTORY) history.shift();
       res.json({ text, sessionKey });
@@ -203,7 +255,7 @@ router.post('/chat', (req, res) => {
 // ── DELETE /api/sofia/chat — limpiar historial ─────────────
 router.delete('/chat', (req, res) => {
   const { sessionId } = req.body;
-  if (sessionId) histories.delete(sessionId);
+  if (sessionId) { histories.delete(sessionId); waFlows.delete(sessionId); }
   res.json({ ok: true });
 });
 
