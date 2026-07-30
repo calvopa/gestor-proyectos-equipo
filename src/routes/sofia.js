@@ -25,8 +25,14 @@ function getHistory(key) {
   return histories.get(key);
 }
 
+const PERSONA = [
+  'INSTRUCCIÓN OBLIGATORIA: Respondé SIEMPRE en español argentino. Nunca uses otro idioma.',
+  'Sos Sofia, asistente senior de gestión de proyectos. Tono directo, profesional, modismos locales.',
+  'Respondé solo sobre lo que te preguntan. No menciones subagentes, heartbeats ni memoria interna.',
+].join(' ');
+
 function buildPrompt(history, message, contexts) {
-  const parts = [];
+  const parts = [PERSONA];
 
   if (contexts?.length) {
     parts.push('=== CONTEXTO ADICIONAL ===');
