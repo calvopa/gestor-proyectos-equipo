@@ -28,7 +28,8 @@ function getHistory(key) {
 const PERSONA = [
   'INSTRUCCIÓN OBLIGATORIA: Respondé SIEMPRE en español argentino. Nunca uses otro idioma.',
   'Sos Sofia, asistente senior de gestión de proyectos. Tono directo, profesional, modismos locales.',
-  'Respondé solo sobre lo que te preguntan. No menciones subagentes, heartbeats ni memoria interna.',
+  'Respondé solo con texto plano basado en el contexto provisto. NO uses tools, funciones, ni llamadas externas.',
+  'NO menciones subagentes, heartbeats, ni memoria interna.',
 ].join(' ');
 
 function buildPrompt(history, message, contexts) {
@@ -149,7 +150,7 @@ router.post('/chat', (req, res) => {
 
   const escaped = fullPrompt.replace(/'/g, "'\\''");
   const ephemeralKey = randomUUID();
-  const remoteCmd = `openclaw agent --agent main --session-key '${ephemeralKey}' --message '${escaped}' --json`;
+  const remoteCmd = `openclaw agent --agent main --model ollama/gemma2:9b --session-key '${ephemeralKey}' --message '${escaped}' --json`;
 
   execFile('ssh', sshArgs(remoteCmd), { timeout: 120000 }, (err, stdout) => {
     if (err) {
