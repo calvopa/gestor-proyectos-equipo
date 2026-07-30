@@ -31,37 +31,34 @@ const PERSONA = [
   'Respondé solo con texto plano basado en el contexto provisto. NO uses tools internas ni llamadas de función.',
   'NO menciones subagentes, heartbeats, ni memoria interna.',
   'WHATSAPP: SÍ podés enviar WhatsApp reales.',
-  'Si el contexto incluye una línea "INSTRUCCIÓN WA: Para enviar...", seguila exactamente y generá el marcador [WA:NUMERO:mensaje].',
-  'Si te piden enviar WA pero no especifican a quién, preguntá: "¿A quién le mando el WhatsApp?"',
+  'Para enviar WA redactá el mensaje y terminá tu respuesta con el marcador: [WA:NombreApellido:texto del mensaje]',
+  'Ejemplo: [WA:PabloCalvo:Hacoaj vence en 5 días, revisá el estado del desarrollo.]',
+  'Si no sabés a quién enviarlo, preguntá: "¿A quién le mando el WhatsApp?"',
   'NUNCA digas que no podés enviar WhatsApp.',
 ].join(' ');
 
-// Busca nombres de recursos en el mensaje y resuelve sus números de WA en Node.js
-// para no depender de que el LLM haga el lookup correctamente.
-function buildWaHint(message, db) {
+// Resuelve marcadores [WA:NombreONumero:msg] → [WA:+549...:msg] buscando en la DB.
+// El LLM puede poner un nombre en vez del número; Node.js lo reemplaza.
+function resolveWaMarkers(text, db) {
   const resources = db.prepare('SELECT nombre, telefono FROM resources WHERE activo=1').all();
-  const hints = [];
-  const msgLower = message.toLowerCase();
-  for (const r of resources) {
-    const firstName = r.nombre.split(' ')[0].toLowerCase();
-    if (msgLower.includes(r.nombre.toLowerCase()) || msgLower.includes(firstName)) {
-      if (r.telefono) {
-        hints.push(`INSTRUCCIÓN WA: Para enviar WhatsApp a ${r.nombre} usá EXACTAMENTE este número: ${r.telefono}. Generá el marcador [WA:${r.telefono}:mensaje aquí].`);
-      } else {
-        hints.push(`INSTRUCCIÓN WA: ${r.nombre} no tiene número registrado. Respondé solo: "No tengo el número de ${r.nombre}. ¿Me lo pasás?"`);
+  return text.replace(/\[WA:([^:\]]+):([^\]]+)\]/g, (match, target, msg) => {
+    const t = target.trim();
+    if (t.startsWith('+')) return match; // ya es E.164
+    const tLower = t.toLowerCase().replace(/\s/g, '');
+    for (const r of resources) {
+      const rLower = r.nombre.toLowerCase().replace(/\s/g, '');
+      const rFirst = r.nombre.split(' ')[0].toLowerCase();
+      if (tLower === rLower || tLower.includes(rFirst) || rLower.includes(tLower)) {
+        if (r.telefono) return `[WA:${r.telefono}:${msg}]`;
+        return `[WA_NONUM:${r.nombre}:${msg}]`; // señal al frontend de que no hay número
       }
     }
-  }
-  return hints.join('\n');
+    return match; // no se pudo resolver, se deja como está
+  });
 }
 
-function buildPrompt(history, message, contexts, waHint) {
+function buildPrompt(history, message, contexts) {
   const parts = [PERSONA];
-
-  if (waHint) {
-    parts.push(waHint);
-    parts.push('');
-  }
 
   if (contexts?.length) {
     parts.push('Información de contexto:');
@@ -174,15 +171,7 @@ router.post('/chat', (req, res) => {
   const db = getDb();
   const autoCtx = buildAutoContext(db);
   const allContexts = autoCtx ? [autoCtx, ...(contexts || [])] : (contexts || []);
-  const lastBotMsg = history.length > 0 ? history[history.length - 1].bot : '';
-  const isWaFlow = /whatsap+|\bwhat?s?a?p?\b|enviar?\s+mensaj|mandá?\s+un/i.test(message)
-    || /quién le mando|a quién/i.test(lastBotMsg);
-  // En flujo WA, también buscar nombres en el turno anterior del usuario
-  const prevUserMsg = history.length > 0 ? history[history.length - 1].user : '';
-  const waHint = isWaFlow
-    ? (buildWaHint(message, db) || buildWaHint(prevUserMsg, db))
-    : '';
-  const fullPrompt = buildPrompt(history, message, allContexts, waHint);
+  const fullPrompt = buildPrompt(history, message, allContexts);
 
   const escaped = fullPrompt.replace(/'/g, "'\\''");
   const ephemeralKey = randomUUID();
@@ -195,7 +184,12 @@ router.post('/chat', (req, res) => {
     }
     try {
       const json = JSON.parse(stdout.trim());
-      const text = json.result?.payloads?.[0]?.text ?? '';
+      let text = json.result?.payloads?.[0]?.text ?? '';
+      // Resolver nombres en marcadores WA → números E.164 desde la DB
+      text = resolveWaMarkers(text, db);
+      // Convertir WA_NONUM en aviso legible
+      text = text.replace(/\[WA_NONUM:([^\]:]+):[^\]]+\]/g,
+        (_, nombre) => `(No tengo el número de WhatsApp de ${nombre}. Cargalo en Recursos para poder enviarlo.)`);
       history.push({ user: message, bot: text.slice(0, MAX_BOT_HISTORY_CHARS) });
       if (history.length > MAX_HISTORY) history.shift();
       res.json({ text, sessionKey });
