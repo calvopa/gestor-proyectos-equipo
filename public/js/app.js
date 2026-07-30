@@ -1422,16 +1422,17 @@ async function renderResources() {
       <table>
         <thead>
           <tr>
-            <th>Nombre</th><th>Rol</th><th>Email</th><th>Estado</th><th>ClickUp ID</th><th></th>
+            <th>Nombre</th><th>Rol</th><th>Email</th><th>Teléfono</th><th>Estado</th><th>ClickUp ID</th><th></th>
           </tr>
         </thead>
         <tbody>
-          ${resources.length === 0 ? `<tr><td colspan="6"><div class="empty"><div class="empty-icon">👥</div><p>Sin recursos todavía</p></div></td></tr>` :
+          ${resources.length === 0 ? `<tr><td colspan="7"><div class="empty"><div class="empty-icon">👥</div><p>Sin recursos todavía</p></div></td></tr>` :
             resources.map(r => `
               <tr data-id="${r.id}">
                 <td><strong>${escHtml(r.nombre)}</strong></td>
                 <td>${escHtml(r.rol||'—')}</td>
                 <td>${escHtml(r.email||'—')}</td>
+                <td style="font-size:12px">${escHtml(r.telefono||'—')}</td>
                 <td><span class="badge ${r.activo ? 'badge-en_curso' : 'badge-cerrado'}">${r.activo ? 'Activo' : 'Inactivo'}</span></td>
                 <td style="font-size:12px;color:var(--text2)">${escHtml(r.clickup_member_id||'—')}</td>
                 <td>
@@ -1465,6 +1466,7 @@ async function showResourceModal(id = null) {
         <div class="form-group"><label>Nombre *</label><input type="text" id="r-nombre" value="${escHtml(r.nombre||'')}"></div>
         <div class="form-group"><label>Rol</label><input type="text" id="r-rol" value="${escHtml(r.rol||'')}"></div>
         <div class="form-group"><label>Email</label><input type="email" id="r-email" value="${escHtml(r.email||'')}"></div>
+        <div class="form-group"><label>Teléfono WhatsApp</label><input type="tel" id="r-telefono" placeholder="ej: 1122334455" value="${escHtml(r.telefono||'')}"></div>
         <div class="form-group">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
             <input type="checkbox" id="r-activo" ${(!id || r.activo) ? 'checked' : ''} style="width:auto">
@@ -1489,6 +1491,7 @@ async function showResourceModal(id = null) {
       nombre,
       rol: document.getElementById('r-rol').value.trim() || null,
       email: document.getElementById('r-email').value.trim() || null,
+      telefono: document.getElementById('r-telefono').value.trim() || null,
       activo: document.getElementById('r-activo').checked,
     };
     try {

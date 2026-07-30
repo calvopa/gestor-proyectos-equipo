@@ -77,7 +77,7 @@ function buildAutoContext(db) {
     `).all();
 
     const resources = db.prepare(`
-      SELECT r.nombre, r.rol,
+      SELECT r.nombre, r.rol, r.telefono,
              COUNT(DISTINCT CASE WHEN p.estado != 'cerrado' THEN a.project_id END) AS proyectos_activos,
              COALESCE(SUM(CASE WHEN te.tipo != 'estimado' THEN te.duracion_seg ELSE 0 END), 0) AS seg_total
       FROM resources r
@@ -120,7 +120,8 @@ function buildAutoContext(db) {
       lines.push('Recursos del equipo:');
       for (const r of resources) {
         const h = Math.round(r.seg_total / 3600 * 10) / 10;
-        lines.push(`${r.nombre}${r.rol ? ` (${r.rol})` : ''} — ${r.proyectos_activos} proyectos activos, ${h}h registradas`);
+        const tel = r.telefono ? ` | WhatsApp: ${r.telefono}` : '';
+        lines.push(`${r.nombre}${r.rol ? ` (${r.rol})` : ''}${tel} — ${r.proyectos_activos} proyectos activos, ${h}h registradas`);
       }
     }
 
@@ -255,12 +256,21 @@ router.post('/parse-file', express.json({ limit: '10mb' }), async (req, res) => 
 });
 
 // ── POST /api/sofia/whatsapp-send ────────────────────────
+function normalizePhone(raw) {
+  const digits = raw.trim().replace(/[\s\-().]/g, '');
+  if (digits.startsWith('+')) return digits;          // ya es E.164
+  if (digits.startsWith('549')) return `+${digits}`;  // 549...
+  if (digits.startsWith('54'))  return `+${digits}`;  // 54...
+  return `+549${digits}`;                             // número local → agrega +549
+}
+
 router.post('/whatsapp-send', (req, res) => {
   const { to, message } = req.body;
   if (!to?.trim() || !message?.trim()) {
     return res.status(400).json({ error: 'to y message son requeridos' });
   }
-  const toEscaped = to.trim().replace(/'/g, "'\\''");
+  const normalized = normalizePhone(to);
+  const toEscaped = normalized.replace(/'/g, "'\\''");
   const msgEscaped = message.trim().replace(/'/g, "'\\''");
   const remoteCmd = `openclaw message send --channel whatsapp --target '${toEscaped}' --message '${msgEscaped}' --json`;
 
@@ -271,9 +281,9 @@ router.post('/whatsapp-send', (req, res) => {
     }
     try {
       const json = JSON.parse(stdout.trim());
-      res.json({ ok: true, result: json });
+      res.json({ ok: true, to: normalized, result: json });
     } catch {
-      res.json({ ok: true });
+      res.json({ ok: true, to: normalized });
     }
   });
 });

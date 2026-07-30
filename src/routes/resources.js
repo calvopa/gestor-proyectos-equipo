@@ -38,13 +38,13 @@ router.get('/:id', (req, res) => {
 
 router.post('/', (req, res) => {
   const db = getDb();
-  const { nombre, rol, email, clickup_member_id, activo } = req.body;
+  const { nombre, rol, email, clickup_member_id, activo, telefono } = req.body;
   if (!nombre) return res.status(400).json({ error: 'nombre requerido' });
 
   const result = db.prepare(`
-    INSERT INTO resources (nombre, rol, email, clickup_member_id, activo)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(nombre, rol || null, email || null, clickup_member_id || null, activo !== false ? 1 : 0);
+    INSERT INTO resources (nombre, rol, email, clickup_member_id, activo, telefono)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(nombre, rol || null, email || null, clickup_member_id || null, activo !== false ? 1 : 0, telefono || null);
 
   res.status(201).json(db.prepare('SELECT * FROM resources WHERE id=?').get(result.lastInsertRowid));
 });
@@ -54,10 +54,10 @@ router.put('/:id', (req, res) => {
   const r = db.prepare('SELECT * FROM resources WHERE id=?').get(req.params.id);
   if (!r) return res.status(404).json({ error: 'not found' });
 
-  const { nombre, rol, email, activo } = req.body;
+  const { nombre, rol, email, activo, telefono } = req.body;
   db.prepare(`
-    UPDATE resources SET nombre=?, rol=?, email=?, activo=? WHERE id=?
-  `).run(nombre ?? r.nombre, rol ?? r.rol, email ?? r.email, activo !== undefined ? (activo ? 1 : 0) : r.activo, req.params.id);
+    UPDATE resources SET nombre=?, rol=?, email=?, activo=?, telefono=? WHERE id=?
+  `).run(nombre ?? r.nombre, rol ?? r.rol, email ?? r.email, activo !== undefined ? (activo ? 1 : 0) : r.activo, telefono !== undefined ? (telefono || null) : r.telefono, req.params.id);
 
   res.json(db.prepare('SELECT * FROM resources WHERE id=?').get(req.params.id));
 });
