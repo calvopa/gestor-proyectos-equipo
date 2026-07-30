@@ -6,7 +6,7 @@ const { getDb } = require('../db');
 const OPENCLAW_SSH_HOST = process.env.OPENCLAW_SSH_HOST || 'openclaw';
 const OPENCLAW_SSH_KEY  = process.env.OPENCLAW_SSH_KEY  || null;
 const MAX_HISTORY = 4;
-const MAX_PROMPT_CHARS = 4000;
+const MAX_PROMPT_CHARS = 8000;
 
 function sshArgs(remoteCmd) {
   const args = [];
@@ -28,8 +28,7 @@ function buildPrompt(history, message, contexts) {
 
   if (contexts?.length) {
     parts.push('=== CONTEXTO ADICIONAL ===');
-    // Truncate each context block to avoid overflow
-    contexts.forEach(c => parts.push(c.slice(0, 2000)));
+    contexts.forEach(c => parts.push(c.slice(0, 6000)));
     parts.push('=== FIN CONTEXTO ===\n');
   }
 
@@ -49,6 +48,84 @@ function buildPrompt(history, message, contexts) {
   return result;
 }
 
+// ── Auto-context: snapshot completo de la DB ─────────────
+function buildAutoContext(db) {
+  try {
+    const today = new Date();
+
+    const projects = db.prepare(`
+      SELECT p.nombre, p.descripcion, p.estado, p.prioridad,
+             p.fecha_fin_est, p.last_comment_text, p.last_comment_by,
+             COALESCE(SUM(CASE WHEN te.tipo != 'estimado' THEN te.duracion_seg ELSE 0 END), 0) AS seg_real,
+             COALESCE(SUM(CASE WHEN te.tipo = 'estimado' THEN te.duracion_seg ELSE 0 END), 0) AS seg_est,
+             GROUP_CONCAT(DISTINCT r.nombre) AS equipo
+      FROM projects p
+      LEFT JOIN time_entries te ON te.project_id = p.id
+      LEFT JOIN assignments a ON a.project_id = p.id
+      LEFT JOIN resources r ON r.id = a.resource_id
+      WHERE p.estado != 'cerrado'
+      GROUP BY p.id
+      ORDER BY
+        CASE p.estado WHEN 'en_curso' THEN 0 WHEN 'pausado' THEN 1 ELSE 2 END,
+        CASE p.prioridad WHEN 'alta' THEN 0 WHEN 'media' THEN 1 ELSE 2 END
+    `).all();
+
+    const resources = db.prepare(`
+      SELECT r.nombre, r.rol,
+             COUNT(DISTINCT CASE WHEN p.estado != 'cerrado' THEN a.project_id END) AS proyectos_activos,
+             COALESCE(SUM(CASE WHEN te.tipo != 'estimado' THEN te.duracion_seg ELSE 0 END), 0) AS seg_total
+      FROM resources r
+      LEFT JOIN assignments a ON a.resource_id = r.id
+      LEFT JOIN projects p ON p.id = a.project_id
+      LEFT JOIN time_entries te ON te.resource_id = r.id
+      WHERE r.activo = 1
+      GROUP BY r.id
+      ORDER BY r.nombre
+    `).all();
+
+    const lines = [
+      `=== GESTOR DE PROYECTOS — ${today.toLocaleDateString('es-AR')} ===`,
+    ];
+
+    for (const p of projects) {
+      const hReal = Math.round(p.seg_real / 3600 * 10) / 10;
+      const hEst  = Math.round(p.seg_est  / 3600 * 10) / 10;
+      const vence = p.fecha_fin_est ? new Date(p.fecha_fin_est) : null;
+      const dias  = vence ? Math.round((vence - today) / 86400000) : null;
+      const venceStr = !vence         ? 'sin fecha límite'
+        : dias < 0                    ? `⚠️ VENCIDO hace ${Math.abs(dias)} días`
+        : dias === 0                  ? '⚠️ VENCE HOY'
+        : dias <= 7                   ? `⚠️ vence en ${dias} días`
+        :                               `vence en ${dias} días`;
+
+      let linea = `[${p.estado.toUpperCase()}] ${p.nombre}`;
+      linea += ` | Prioridad: ${p.prioridad} | ${venceStr}`;
+      linea += ` | Horas reales: ${hReal}h`;
+      if (hEst > 0) linea += ` / estimadas: ${hEst}h`;
+      if (p.equipo) linea += ` | Equipo: ${p.equipo}`;
+      if (p.descripcion) linea += ` | Desc: ${p.descripcion.slice(0, 100)}`;
+      if (p.last_comment_text) {
+        linea += ` | Último comentario (${p.last_comment_by || 'N/A'}): "${p.last_comment_text.slice(0, 80)}"`;
+      }
+      lines.push(linea);
+    }
+
+    if (resources.length) {
+      lines.push('--- Recursos ---');
+      for (const r of resources) {
+        const h = Math.round(r.seg_total / 3600 * 10) / 10;
+        lines.push(`${r.nombre}${r.rol ? ` (${r.rol})` : ''} — ${r.proyectos_activos} proyectos activos, ${h}h registradas`);
+      }
+    }
+
+    lines.push('=== FIN DATOS ===');
+    return lines.join('\n');
+  } catch (e) {
+    console.error('[sofia/autoContext]', e.message);
+    return '';
+  }
+}
+
 // ── POST /api/sofia/chat ──────────────────────────────────
 router.post('/chat', (req, res) => {
   const { message, sessionId, contexts } = req.body;
@@ -56,7 +133,11 @@ router.post('/chat', (req, res) => {
 
   const sessionKey = sessionId || 'agent:main:gestor:default';
   const history = getHistory(sessionKey);
-  const fullPrompt = buildPrompt(history, message, contexts);
+
+  const db = getDb();
+  const autoCtx = buildAutoContext(db);
+  const allContexts = autoCtx ? [autoCtx, ...(contexts || [])] : (contexts || []);
+  const fullPrompt = buildPrompt(history, message, allContexts);
 
   const escaped = fullPrompt.replace(/'/g, "'\\''");
   const remoteCmd = `openclaw agent --agent main --message '${escaped}' --json`;
