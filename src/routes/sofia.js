@@ -35,19 +35,19 @@ function buildPrompt(history, message, contexts) {
   const parts = [PERSONA];
 
   if (contexts?.length) {
-    parts.push('=== CONTEXTO ADICIONAL ===');
+    parts.push('Información de contexto:');
     contexts.forEach(c => parts.push(c.slice(0, 3000)));
-    parts.push('=== FIN CONTEXTO ===\n');
+    parts.push('');
   }
 
   if (history.length) {
     const histStr = history
-      .map(t => `Usuario: ${t.user}\nSofia: ${t.bot}`)
+      .map(t => `- El usuario dijo: ${t.user}\n- Vos respondiste: ${t.bot}`)
       .join('\n');
-    parts.push(`Historial de conversación:\n${histStr}\n`);
+    parts.push(`Conversación previa:\n${histStr}\n`);
   }
 
-  parts.push(`Usuario: ${message}`);
+  parts.push(`El usuario pregunta ahora: ${message}`);
   const result = parts.join('\n');
 
   if (result.length > MAX_PROMPT_CHARS) {
@@ -92,7 +92,7 @@ function buildAutoContext(db) {
     `).all();
 
     const lines = [
-      `=== GESTOR DE PROYECTOS — ${today.toLocaleDateString('es-AR')} ===`,
+      `Proyectos del gestor al ${today.toLocaleDateString('es-AR')}:`,
     ];
 
     for (const p of projects) {
@@ -119,14 +119,14 @@ function buildAutoContext(db) {
     }
 
     if (resources.length) {
-      lines.push('--- Recursos ---');
+      lines.push('Recursos del equipo:');
       for (const r of resources) {
         const h = Math.round(r.seg_total / 3600 * 10) / 10;
         lines.push(`${r.nombre}${r.rol ? ` (${r.rol})` : ''} — ${r.proyectos_activos} proyectos activos, ${h}h registradas`);
       }
     }
 
-    lines.push('=== FIN DATOS ===');
+    lines.push('Fin de datos del gestor.');
     return lines.join('\n');
   } catch (e) {
     console.error('[sofia/autoContext]', e.message);
