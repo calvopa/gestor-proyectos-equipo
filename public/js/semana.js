@@ -127,10 +127,12 @@ function semanaRenderFull() {
     <div class="sem-header">
       <h1 class="sem-title">📅 Avance Semanal</h1>
       <div class="sem-week-nav">
-        <button class="btn btn-ghost btn-sm" id="sem-prev">← anterior</button>
-        <span class="sem-week-label">${swFmtRange(from)}</span>
-        <button class="btn btn-ghost btn-sm" id="sem-next" ${isFuture ? 'disabled' : ''}>siguiente →</button>
-        <button class="btn btn-ghost btn-sm" id="sem-current" ${from === todayMon ? 'disabled' : ''}>Esta semana</button>
+        <div class="sem-week-pager">
+          <button class="btn btn-ghost btn-sm" id="sem-prev">←</button>
+          <span class="sem-week-label">${swFmtRange(from)}</span>
+          <button class="btn btn-ghost btn-sm" id="sem-next" ${isFuture ? 'disabled' : ''}>→</button>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="sem-current" ${from === todayMon ? 'disabled' : ''}>Hoy</button>
         <button class="btn btn-ghost btn-sm" id="sem-refresh" title="Recargar desde ClickUp">↻</button>
       </div>
     </div>
@@ -439,17 +441,22 @@ function semanaPresentDraw(overlay, data) {
 
   overlay.innerHTML = `
     <div class="sem-pres-bar">
-      <button class="sem-pres-esc" id="sem-pres-close">ESC · Salir</button>
+      <button class="sem-pres-esc" id="sem-pres-close">✕ Salir</button>
       <span class="sem-pres-range">${swFmtRange(data.week_start)}</span>
-      <span class="sem-pres-counter">${idx + 1} / ${total} con actividad</span>
+      <div class="sem-pres-bar-right">
+        <span class="sem-pres-keys">← → navegar</span>
+        <span class="sem-pres-counter">${idx + 1} / ${total}</span>
+      </div>
     </div>
+    ${idx > 0 ? '<div class="sem-pres-zone sem-pres-zone-prev" id="sem-pres-zone-prev" title="Anterior"></div>' : ''}
+    ${idx < total - 1 ? '<div class="sem-pres-zone sem-pres-zone-next" id="sem-pres-zone-next" title="Siguiente"></div>' : ''}
     <div class="sem-pres-body">
       ${semanaPresentCardHtml(p, data.week_start)}
     </div>
     <div class="sem-pres-footer">
-      <button class="sem-pres-arrow" id="sem-pres-prev" ${idx === 0 ? 'disabled' : ''}>←</button>
+      <button class="sem-pres-arrow" id="sem-pres-prev" ${idx === 0 ? 'disabled' : ''}>← Anterior</button>
       <div class="sem-pres-dots">${dots}</div>
-      <button class="sem-pres-arrow" id="sem-pres-next" ${idx === total - 1 ? 'disabled' : ''}>→</button>
+      <button class="sem-pres-arrow" id="sem-pres-next" ${idx === total - 1 ? 'disabled' : ''}>Siguiente →</button>
     </div>
   `;
 
@@ -485,6 +492,22 @@ function semanaPresentDraw(overlay, data) {
   });
   document.getElementById('sem-pres-next').addEventListener('click', () => {
     if (semanaState.presentIdx < total - 1) { semanaState.presentIdx++; semanaPresentDraw(overlay, data); }
+  });
+
+  // Click zones
+  document.getElementById('sem-pres-zone-prev')?.addEventListener('click', () => {
+    if (semanaState.presentIdx > 0) { semanaState.presentIdx--; semanaPresentDraw(overlay, data); }
+  });
+  document.getElementById('sem-pres-zone-next')?.addEventListener('click', () => {
+    if (semanaState.presentIdx < total - 1) { semanaState.presentIdx++; semanaPresentDraw(overlay, data); }
+  });
+
+  // Click dots to jump directly
+  overlay.querySelectorAll('.sem-pres-dot').forEach((dot, i) => {
+    dot.addEventListener('click', () => {
+      semanaState.presentIdx = i;
+      semanaPresentDraw(overlay, data);
+    });
   });
 }
 
