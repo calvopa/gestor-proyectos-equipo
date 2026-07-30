@@ -6,7 +6,8 @@ const { getDb } = require('../db');
 const OPENCLAW_SSH_HOST = process.env.OPENCLAW_SSH_HOST || 'openclaw';
 const OPENCLAW_SSH_KEY  = process.env.OPENCLAW_SSH_KEY  || null;
 const MAX_HISTORY = 4;
-const MAX_PROMPT_CHARS = 8000;
+const MAX_PROMPT_CHARS = 4000;
+const MAX_BOT_HISTORY_CHARS = 400;
 
 function sshArgs(remoteCmd) {
   const args = [];
@@ -28,7 +29,7 @@ function buildPrompt(history, message, contexts) {
 
   if (contexts?.length) {
     parts.push('=== CONTEXTO ADICIONAL ===');
-    contexts.forEach(c => parts.push(c.slice(0, 6000)));
+    contexts.forEach(c => parts.push(c.slice(0, 3000)));
     parts.push('=== FIN CONTEXTO ===\n');
   }
 
@@ -150,7 +151,7 @@ router.post('/chat', (req, res) => {
     try {
       const json = JSON.parse(stdout.trim());
       const text = json.result?.payloads?.[0]?.text ?? '';
-      history.push({ user: message, bot: text });
+      history.push({ user: message, bot: text.slice(0, MAX_BOT_HISTORY_CHARS) });
       if (history.length > MAX_HISTORY) history.shift();
       res.json({ text, sessionKey });
     } catch (e) {
