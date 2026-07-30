@@ -2049,6 +2049,33 @@ tr.fila-yellow:hover td { background: rgba(240,192,48,.08); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Directional slide transitions */
+@keyframes sem-slide-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(64px) scale(0.97);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes sem-slide-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-64px) scale(0.97);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0);
+  }
+}
+
 .sem-pres-overlay {
   position: fixed;
   inset: 0;
@@ -2089,15 +2116,16 @@ tr.fila-yellow:hover td { background: rgba(240,192,48,.08); }
 .sem-pres-keys    { font-size: 11px; color: var(--pres-dot); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
 .sem-pres-counter { font-size: 13px; font-weight: 700; color: var(--pres-text2); font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
 
-/* Body: fix scroll — justify-content: center breaks overflow on tall cards */
+/* Body: column flex + align center → card uses margin:auto for vertical centering */
 .sem-pres-body {
   flex: 1;
   min-height: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  padding: 28px 80px;
+  padding: 32px 80px;
   overflow-y: auto;
+  overflow-x: hidden;
   scrollbar-width: thin;
 }
 
@@ -2107,8 +2135,16 @@ tr.fila-yellow:hover td { background: rgba(240,192,48,.08); }
   display: flex;
   flex-direction: column;
   gap: 20px;
-  margin: auto 0;
-  animation: sem-pres-fadein .18s ease;
+  margin: auto 0;                    /* vertical centering when content is short */
+  animation: sem-pres-fadein .2s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Directional animations — set data-pres-dir on overlay before innerHTML swap */
+.sem-pres-overlay[data-pres-dir="next"] .sem-pres-card {
+  animation: sem-slide-from-right .28s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.sem-pres-overlay[data-pres-dir="prev"] .sem-pres-card {
+  animation: sem-slide-from-left .28s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 /* Click zones — left/right edges for click-to-navigate */

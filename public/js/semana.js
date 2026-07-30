@@ -413,12 +413,12 @@ function semanaEnterPresentation() {
     else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       if (semanaState.presentIdx < active.length - 1) {
         semanaState.presentIdx++;
-        semanaPresentDraw(overlay, data);
+        semanaPresentDraw(overlay, data, 'next');
       }
     } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
       if (semanaState.presentIdx > 0) {
         semanaState.presentIdx--;
-        semanaPresentDraw(overlay, data);
+        semanaPresentDraw(overlay, data, 'prev');
       }
     }
   }
@@ -431,7 +431,11 @@ function semanaExitPresentation(overlay, keyHandler) {
   overlay.remove();
 }
 
-function semanaPresentDraw(overlay, data) {
+function semanaPresentDraw(overlay, data, dir = null) {
+  // Set direction attribute BEFORE innerHTML so CSS animation selector picks it up immediately
+  if (dir) overlay.dataset.presDir = dir;
+  else delete overlay.dataset.presDir;
+
   const active = semanaState.presentProjects;
   const idx    = semanaState.presentIdx;
   const p      = active[idx];
@@ -488,25 +492,26 @@ function semanaPresentDraw(overlay, data) {
   }
 
   document.getElementById('sem-pres-prev').addEventListener('click', () => {
-    if (semanaState.presentIdx > 0) { semanaState.presentIdx--; semanaPresentDraw(overlay, data); }
+    if (semanaState.presentIdx > 0) { semanaState.presentIdx--; semanaPresentDraw(overlay, data, 'prev'); }
   });
   document.getElementById('sem-pres-next').addEventListener('click', () => {
-    if (semanaState.presentIdx < total - 1) { semanaState.presentIdx++; semanaPresentDraw(overlay, data); }
+    if (semanaState.presentIdx < total - 1) { semanaState.presentIdx++; semanaPresentDraw(overlay, data, 'next'); }
   });
 
   // Click zones
   document.getElementById('sem-pres-zone-prev')?.addEventListener('click', () => {
-    if (semanaState.presentIdx > 0) { semanaState.presentIdx--; semanaPresentDraw(overlay, data); }
+    if (semanaState.presentIdx > 0) { semanaState.presentIdx--; semanaPresentDraw(overlay, data, 'prev'); }
   });
   document.getElementById('sem-pres-zone-next')?.addEventListener('click', () => {
-    if (semanaState.presentIdx < total - 1) { semanaState.presentIdx++; semanaPresentDraw(overlay, data); }
+    if (semanaState.presentIdx < total - 1) { semanaState.presentIdx++; semanaPresentDraw(overlay, data, 'next'); }
   });
 
   // Click dots to jump directly
   overlay.querySelectorAll('.sem-pres-dot').forEach((dot, i) => {
     dot.addEventListener('click', () => {
+      const prevIdx = semanaState.presentIdx;
       semanaState.presentIdx = i;
-      semanaPresentDraw(overlay, data);
+      semanaPresentDraw(overlay, data, i > prevIdx ? 'next' : 'prev');
     });
   });
 }
