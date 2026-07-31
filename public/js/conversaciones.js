@@ -16,6 +16,13 @@ function convFmtDate(str) {
   });
 }
 
+function convSessionLabel(key) {
+  // session:1722441234567 → hora de inicio legible
+  const ts = key?.match(/session:(\d+)/)?.[1];
+  if (ts) return convFmtDate(new Date(Number(ts)).toISOString());
+  return key?.slice(0, 24) + '…';
+}
+
 function convPreview(txt, max = 80) {
   if (!txt) return '<span style="color:var(--text2);font-style:italic">Sin mensajes</span>';
   const clean = txt.replace(/\[WA[^\]]*\]/g, '').trim();
@@ -75,7 +82,7 @@ function convRenderList(main, conversations) {
           <tbody>
             ${conversations.map(c => `
               <tr class="conv-row" data-id="${c.id}">
-                <td class="conv-session"><code>${escHtml(c.session_key.slice(0, 16))}…</code></td>
+                <td class="conv-session">${convSessionLabel(c.session_key)}</td>
                 <td class="conv-preview">${convPreview(c.first_msg)}</td>
                 <td class="conv-count">${Math.floor(c.message_count / 2)} turno${c.message_count / 2 !== 1 ? 's' : ''}</td>
                 <td class="conv-date">${convFmtDate(c.created_at)}</td>

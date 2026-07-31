@@ -12,7 +12,7 @@
   const fileInput = document.getElementById('sofia-file-input');
   const contextBar = document.getElementById('sofia-context-bar');
 
-  let sessionId = null;
+  let sessionId = `session:${Date.now()}`;
   let open = false;
   let busy = false;
   let pendingContexts = []; // [{label, content}]
@@ -44,7 +44,7 @@
   // ── Clear session ─────────────────────────────────────────
   clearBtn.addEventListener('click', async () => {
     if (sessionId) await api.sofiaClear(sessionId).catch(() => {});
-    sessionId = `agent:main:gestor:${Date.now()}`;
+    sessionId = `session:${Date.now()}`;
     pendingContexts = [];
     renderContextBar();
     msgs.innerHTML = `<div class="sofia-msg sofia-msg-bot">
