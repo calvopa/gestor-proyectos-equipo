@@ -260,6 +260,22 @@ router.post('/chat', (req, res) => {
       history.push({ user: message, bot: text.slice(0, MAX_BOT_HISTORY_CHARS) });
       if (history.length > MAX_HISTORY) history.shift();
       res.json({ text, sessionKey });
+
+      // Persistir turno en SQLite (non-blocking)
+      setImmediate(() => {
+        try {
+          const pdb = getDb();
+          let conv = pdb.prepare('SELECT id FROM sofia_conversations WHERE session_key=?').get(sessionKey);
+          if (!conv) {
+            const r = pdb.prepare('INSERT INTO sofia_conversations (session_key) VALUES (?)').run(sessionKey);
+            conv = { id: r.lastInsertRowid };
+          } else {
+            pdb.prepare('UPDATE sofia_conversations SET updated_at=datetime("now") WHERE id=?').run(conv.id);
+          }
+          pdb.prepare('INSERT INTO sofia_messages (conversation_id, role, texto) VALUES (?,?,?)').run(conv.id, 'user', message);
+          pdb.prepare('INSERT INTO sofia_messages (conversation_id, role, texto) VALUES (?,?,?)').run(conv.id, 'bot', text);
+        } catch (pe) { console.error('[sofia/persist]', pe.message); }
+      });
     } catch (e) {
       console.error('[sofia] parse error:', e.message, stdout.slice(0, 300));
       res.status(500).json({ error: 'Error al parsear respuesta de Sofia' });
@@ -385,6 +401,60 @@ router.post('/whatsapp-send', (req, res) => {
       res.json({ ok: true, to: normalized });
     }
   });
+});
+
+// ── GET /api/sofia/conversations — bandeja paginada ──────
+router.get('/conversations', (req, res) => {
+  const limit  = Math.min(parseInt(req.query.limit)  || 20, 100);
+  const offset = Math.max(parseInt(req.query.offset) || 0,  0);
+  try {
+    const db   = getDb();
+    const rows = db.prepare(`
+      SELECT c.id, c.session_key, c.created_at, c.updated_at,
+             COUNT(m.id) AS message_count,
+             (SELECT texto FROM sofia_messages
+              WHERE conversation_id = c.id AND role = 'user'
+              ORDER BY id ASC LIMIT 1) AS first_msg
+      FROM sofia_conversations c
+      LEFT JOIN sofia_messages m ON m.conversation_id = c.id
+      GROUP BY c.id
+      ORDER BY c.updated_at DESC
+      LIMIT ? OFFSET ?
+    `).all(limit, offset);
+    const total = db.prepare('SELECT COUNT(*) AS n FROM sofia_conversations').get().n;
+    res.json({ conversations: rows, total, limit, offset });
+  } catch (e) {
+    console.error('[sofia/conversations]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── GET /api/sofia/conversations/:id — detalle con mensajes
+router.get('/conversations/:id', (req, res) => {
+  try {
+    const db   = getDb();
+    const conv = db.prepare('SELECT * FROM sofia_conversations WHERE id=?').get(req.params.id);
+    if (!conv) return res.status(404).json({ error: 'Conversación no encontrada' });
+    const messages = db.prepare(
+      'SELECT * FROM sofia_messages WHERE conversation_id=? ORDER BY id ASC'
+    ).all(conv.id);
+    res.json({ ...conv, messages });
+  } catch (e) {
+    console.error('[sofia/conversation]', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── DELETE /api/sofia/conversations/:id ───────────────────
+router.delete('/conversations/:id', (req, res) => {
+  try {
+    const db = getDb();
+    db.prepare('DELETE FROM sofia_conversations WHERE id=?').run(req.params.id);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[sofia/conversations/delete]', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── GET /api/sofia/status ─────────────────────────────────

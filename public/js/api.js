@@ -78,4 +78,9 @@ const api = {
   sofiaStatus: () => api._fetch('/api/sofia/status'),
   sofiaWhatsappSend: (to, message) =>
     api._fetch('/api/sofia/whatsapp-send', { method: 'POST', body: { to, message } }),
+
+  // Sofia — Conversaciones (bandeja persistida)
+  sofiaConversations: (p = {}) => api._fetch('/api/sofia/conversations?' + new URLSearchParams(p)),
+  sofiaConversation:  (id)     => api._fetch(`/api/sofia/conversations/${id}`),
+  sofiaDeleteConversation: (id) => api._fetch(`/api/sofia/conversations/${id}`, { method: 'DELETE' }),
 };
