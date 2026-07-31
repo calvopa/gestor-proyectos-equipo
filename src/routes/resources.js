@@ -74,24 +74,34 @@ router.get('/report/carga', (req, res) => {
   const db = getDb();
   const resources = db.prepare('SELECT * FROM resources WHERE activo=1 ORDER BY nombre').all();
 
-  const result = resources.map(r => {
-    const assignments = db.prepare(`
-      SELECT a.*, p.nombre as project_nombre, p.estado as project_estado
-      FROM assignments a JOIN projects p ON p.id=a.project_id
-      WHERE a.resource_id=?
-    `).all(r.id);
+  const assignments = db.prepare(`
+    SELECT a.*, p.nombre as project_nombre, p.estado as project_estado
+    FROM assignments a JOIN projects p ON p.id=a.project_id
+    WHERE a.resource_id IN (SELECT id FROM resources WHERE activo=1)
+  `).all();
 
-    const hours = db.prepare(`
-      SELECT
-        SUM(CASE WHEN p.cuenta_horas=1 THEN COALESCE(te.duracion_seg,0) ELSE 0 END) as seg_contados,
-        SUM(COALESCE(te.duracion_seg,0)) as seg_total
-      FROM time_entries te
-      JOIN projects p ON p.id=te.project_id
-      WHERE te.resource_id=? AND te.fin IS NOT NULL
-    `).get(r.id);
+  const hours = db.prepare(`
+    SELECT
+      te.resource_id,
+      SUM(CASE WHEN p.cuenta_horas=1 THEN COALESCE(te.duracion_seg,0) ELSE 0 END) as seg_contados,
+      SUM(COALESCE(te.duracion_seg,0)) as seg_total
+    FROM time_entries te
+    JOIN projects p ON p.id=te.project_id
+    WHERE te.fin IS NOT NULL
+    GROUP BY te.resource_id
+  `).all();
 
-    return { ...r, assignments, hours };
-  });
+  const assignmentsByResource = assignments.reduce((acc, a) => {
+    (acc[a.resource_id] ||= []).push(a);
+    return acc;
+  }, {});
+  const hoursByResource = Object.fromEntries(hours.map(h => [h.resource_id, h]));
+
+  const result = resources.map(r => ({
+    ...r,
+    assignments: assignmentsByResource[r.id] || [],
+    hours: hoursByResource[r.id] || { seg_contados: 0, seg_total: 0 },
+  }));
 
   res.json(result);
 });

@@ -166,8 +166,8 @@ function buildPrompt(history, message, contexts, waInstruction) {
   parts.push(`El usuario responde: ${message}`);
   const result = parts.join('\n');
 
-  if (result.length > MAX_PROMPT_CHARS) {
-    return result.slice(0, MAX_PROMPT_CHARS) + '\n[...contexto recortado por longitud...]';
+  if ([...result].length > MAX_PROMPT_CHARS) {
+    return [...result].slice(0, MAX_PROMPT_CHARS).join('') + '\n[...contexto recortado por longitud...]';
   }
   return result;
 }
@@ -276,7 +276,7 @@ router.post('/chat', (req, res) => {
 
   // Si el usuario hace una pregunta nueva (no WA) y había un flujo WA activo, limpiarlo.
   // Evita que el flujo WA persista cuando el usuario cambia de tema.
-  const isNewQuery = /^(dame|cuál|cuál|qué|cómo|cual|que|como|muestra|listar|contá|resumí|describí|explicá|estado|info|información)/i.test(message.trim());
+  const isNewQuery = /^(dame|cuál|qué|cómo|cual|que|como|muestra|listar|contá|resumí|describí|explicá|estado|info|información)/i.test(message.trim());
   if (waFlow.wantWa && !isWaMention && isNewQuery) {
     waFlow.wantWa = false;
     waFlow.personName = null;
@@ -321,9 +321,9 @@ router.post('/chat', (req, res) => {
   const ephemeralKey = randomUUID();
   const remoteCmd = `openclaw agent --agent gestor --session-key '${ephemeralKey}' --message '${escaped}' --json`;
 
-  execFile('ssh', sshArgs(remoteCmd), { timeout: 120000 }, (err, stdout) => {
+  execFile('ssh', sshArgs(remoteCmd), { timeout: 120000 }, (err, stdout, stderr) => {
     if (err) {
-      console.error('[sofia] ssh error:', err.message);
+      console.error('[sofia] ssh error:', err.message, stderr?.slice(0, 200));
       return res.status(500).json({ error: 'Error al conectar con Sofia' });
     }
     try {
