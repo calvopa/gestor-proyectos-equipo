@@ -32,16 +32,28 @@ function mapPriority(cuPriority) {
   return PRIORITY_MAP[p] || 'media';
 }
 
-function getDb_() { return getDb(); }
-
 function getSetting(key) {
-  const db = getDb_();
+  const db = getDb();
   const row = db.prepare('SELECT valor FROM settings WHERE clave=?').get(key);
   return row?.valor || null;
 }
 
 function getToken()  { return getSetting('clickup_token')  || process.env.CLICKUP_TOKEN  || null; }
 function getTeamId() { return getSetting('clickup_team_id') || process.env.CLICKUP_TEAM_ID || null; }
+
+function buildProjectMap(db) {
+  return new Map(
+    db.prepare('SELECT clickup_id, id, last_comment_at FROM projects WHERE clickup_id IS NOT NULL').all()
+      .map(p => [p.clickup_id, p])
+  );
+}
+
+function buildResourceMap(db) {
+  return new Map(
+    db.prepare('SELECT clickup_member_id, id FROM resources WHERE clickup_member_id IS NOT NULL').all()
+      .map(r => [r.clickup_member_id, r.id])
+  );
+}
 
 // Lista(s) de ClickUp cuyos tasks se importan como proyectos
 // Puede ser un solo ID o varios separados por coma
@@ -98,7 +110,7 @@ async function fetchAllTasks(listId, token) {
 }
 
 async function syncProjects(token) {
-  const db = getDb_();
+  const db = getDb();
   const listIds = getProjectListIds();
 
   const upsert = db.prepare(`
@@ -119,6 +131,8 @@ async function syncProjects(token) {
       last_comment_at   = excluded.last_comment_at,
       updated_at        = datetime('now')
   `);
+  const updateDates    = db.prepare('UPDATE projects SET fecha_inicio=?, fecha_fin_est=? WHERE clickup_id=?');
+  const insertAssign   = db.prepare('INSERT OR IGNORE INTO assignments (project_id, resource_id) VALUES (?, ?)');
 
   let inserted = 0, updated = 0, commentsUpdated = 0;
 
@@ -127,12 +141,14 @@ async function syncProjects(token) {
     const tasks = await fetchAllTasks(listId, token);
     console.log(`[clickup] ${tasks.length} tasks found`);
 
+    // Pre-fetch existing data into Maps → evita N×2 queries dentro del loop
+    const existingMap = buildProjectMap(db);
+
     for (const t of tasks) {
-      const cuStatus = t.status?.status || '';
-      const estado   = mapStatus(cuStatus);
+      const cuStatus  = t.status?.status || '';
+      const estado    = mapStatus(cuStatus);
       const prioridad = mapPriority(t.priority);
 
-      // Fecha de vencimiento
       const fecha_fin_est = t.due_date
         ? new Date(parseInt(t.due_date)).toISOString().slice(0, 10)
         : null;
@@ -140,53 +156,47 @@ async function syncProjects(token) {
         ? new Date(parseInt(t.start_date)).toISOString().slice(0, 10)
         : null;
 
-      // Descripción desde el texto de la tarea
       const descripcion = t.description || t.text_content || null;
 
-      // Último comentario (reverse=true garantiza el más reciente primero)
       let comment = null;
       try {
         comment = await fetchLastComment(t.id, token);
         await sleep(80); // respetar rate limit
       } catch {}
 
-      const existing = db.prepare('SELECT id, last_comment_at FROM projects WHERE clickup_id=?').get(t.id);
+      const existing = existingMap.get(t.id);
 
-      const row = {
+      upsert.run({
         nombre:            t.name,
-        descripcion:       descripcion,
-        estado:            estado,
-        prioridad:         prioridad,
+        descripcion,
+        estado,
+        prioridad,
         clickup_id:        t.id,
         clickup_status:    cuStatus,
         last_comment_text: comment?.text || null,
         last_comment_by:   comment?.by   || null,
         last_comment_at:   comment?.at   || null,
-      };
+      });
 
-      upsert.run(row);
-
-      // Siempre sincronizar fechas desde ClickUp (si ClickUp las tiene)
       if (fecha_inicio !== null || fecha_fin_est !== null) {
-        db.prepare('UPDATE projects SET fecha_inicio=?, fecha_fin_est=? WHERE clickup_id=?')
-          .run(fecha_inicio, fecha_fin_est, t.id);
+        updateDates.run(fecha_inicio, fecha_fin_est, t.id);
       }
 
       if (comment?.at && comment.at !== existing?.last_comment_at) commentsUpdated++;
       if (existing) updated++; else inserted++;
     }
 
-    // Asignar recursos: si el task tiene assignees, buscar por clickup_member_id y crear assignment
+    // Asignar recursos usando Maps pre-cargados → evita N×M queries
+    const projectMap  = buildProjectMap(db);   // re-fetch tras upserts para incluir nuevos IDs
+    const resourceMap = buildResourceMap(db);
+
     for (const t of tasks) {
-      const project = db.prepare('SELECT id FROM projects WHERE clickup_id=?').get(t.id);
+      const project = projectMap.get(t.id);
       if (!project) continue;
       for (const assignee of (t.assignees || [])) {
-        const resource = db.prepare('SELECT id FROM resources WHERE clickup_member_id=?').get(String(assignee.id));
-        if (!resource) continue;
-        db.prepare(`
-          INSERT OR IGNORE INTO assignments (project_id, resource_id)
-          VALUES (?, ?)
-        `).run(project.id, resource.id);
+        const resourceId = resourceMap.get(String(assignee.id));
+        if (!resourceId) continue;
+        insertAssign.run(project.id, resourceId);
       }
     }
   }
@@ -196,9 +206,15 @@ async function syncProjects(token) {
 }
 
 async function syncMembers(token, teamId) {
-  const db = getDb_();
+  const db = getDb();
   const data = await apiFetch(`/team/${teamId}`, token);
   const members = data.team?.members || [];
+
+  // Pre-fetch existing members to avoid N queries in the loop
+  const existingIds = new Set(
+    db.prepare('SELECT clickup_member_id FROM resources WHERE clickup_member_id IS NOT NULL').all()
+      .map(r => r.clickup_member_id)
+  );
 
   const upsert = db.prepare(`
     INSERT INTO resources (nombre, email, clickup_member_id)
@@ -210,13 +226,13 @@ async function syncMembers(token, teamId) {
 
   let inserted = 0, updated = 0;
   for (const m of members) {
-    const existing = db.prepare('SELECT id FROM resources WHERE clickup_member_id=?').get(String(m.user.id));
+    const memberId = String(m.user.id);
     upsert.run({
       nombre:            m.user.username || m.user.email,
       email:             m.user.email,
-      clickup_member_id: String(m.user.id),
+      clickup_member_id: memberId,
     });
-    if (existing) updated++; else inserted++;
+    if (existingIds.has(memberId)) updated++; else inserted++;
   }
 
   return { inserted, updated, total: members.length };
@@ -235,7 +251,7 @@ async function runSync() {
     const membersResult  = await syncMembers(token, teamId);
     const projectsResult = await syncProjects(token);
 
-    const db = getDb_();
+    const db = getDb();
     db.prepare("INSERT OR REPLACE INTO settings (clave,valor) VALUES ('last_sync',?)").run(new Date().toISOString());
 
     console.log(`[clickup] sync complete — proyectos: +${projectsResult.inserted} creados / ${projectsResult.updated} actualizados / ${projectsResult.commentsUpdated} comentarios nuevos | recursos: +${membersResult.inserted} / ${membersResult.updated}`);
@@ -259,24 +275,8 @@ async function fetchWeekActivity(db, fromStr, toStr, token) {
     'SELECT id, clickup_id FROM projects WHERE clickup_id IS NOT NULL'
   ).all();
 
-  db.prepare('DELETE FROM weekly_activity WHERE week_start=?').run(fromStr);
-
-  // Remove estimated time_entries whose source comment was just deleted (orphans).
-  // This allows the estimator to re-process them with the refreshed full text.
-  db.prepare(`
-    DELETE FROM time_entries
-    WHERE tipo='estimado'
-      AND source_comment_id IS NOT NULL
-      AND NOT EXISTS (
-        SELECT 1 FROM weekly_activity wa WHERE wa.id = time_entries.source_comment_id
-      )
-  `).run();
-
-  const insert = db.prepare(`
-    INSERT INTO weekly_activity (project_id, week_start, event_type, event_at, actor, detail)
-    VALUES (@project_id, @week_start, @event_type, @event_at, @actor, @detail)
-  `);
-
+  // Recolectar todos los eventos primero (async) — no se puede hacer async dentro de una transaction
+  const events = [];
   for (const p of projects) {
     try {
       const data = await apiFetch(`/task/${p.clickup_id}/comment`, token);
@@ -286,7 +286,7 @@ async function fetchWeekActivity(db, fromStr, toStr, token) {
         if (isNaN(ts) || ts < fromMs || ts > toMs) continue;
         const text = (c.comment_text || '').trim();
         if (!text) continue;
-        insert.run({
+        events.push({
           project_id: p.id,
           week_start: fromStr,
           event_type: 'comment',
@@ -300,7 +300,27 @@ async function fetchWeekActivity(db, fromStr, toStr, token) {
       console.error(`[semana] comments for ${p.clickup_id}:`, err.message);
     }
   }
-  console.log(`[semana] fetchWeekActivity done for ${fromStr}`);
+
+  // Delete + insert en una sola transaction — si falla no queda la tabla a medias
+  const insert = db.prepare(`
+    INSERT INTO weekly_activity (project_id, week_start, event_type, event_at, actor, detail)
+    VALUES (@project_id, @week_start, @event_type, @event_at, @actor, @detail)
+  `);
+  db.transaction(() => {
+    db.prepare('DELETE FROM weekly_activity WHERE week_start=?').run(fromStr);
+    // Limpiar time_entries estimados huérfanos para que el estimador los reprocese
+    db.prepare(`
+      DELETE FROM time_entries
+      WHERE tipo='estimado'
+        AND source_comment_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM weekly_activity wa WHERE wa.id = time_entries.source_comment_id
+        )
+    `).run();
+    for (const e of events) insert.run(e);
+  })();
+
+  console.log(`[semana] fetchWeekActivity done for ${fromStr} — ${events.length} eventos`);
 }
 
 module.exports = { runSync, getToken, fetchWeekActivity };

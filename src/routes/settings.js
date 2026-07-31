@@ -2,8 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { getDb } = require('../db');
 
-const PUBLIC_KEYS = ['clickup_token', 'clickup_team_id', 'clickup_mapping_level', 'last_sync', 'sheets_webhook_url'];
-
 router.get('/', (req, res) => {
   const db = getDb();
   const rows = db.prepare('SELECT * FROM settings').all();

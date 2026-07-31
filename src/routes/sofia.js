@@ -172,8 +172,13 @@ function buildPrompt(history, message, contexts, waInstruction) {
   return result;
 }
 
-// ── Auto-context: snapshot completo de la DB ─────────────
+// ── Auto-context: snapshot completo de la DB (cacheado 60s) ─────────────
+let _autoCtxCache = null;
+let _autoCtxAt    = 0;
+const AUTO_CTX_TTL = 60_000;
+
 function buildAutoContext(db) {
+  if (_autoCtxCache && (Date.now() - _autoCtxAt) < AUTO_CTX_TTL) return _autoCtxCache;
   try {
     const today = new Date();
 
@@ -244,7 +249,9 @@ function buildAutoContext(db) {
     }
 
     lines.push('Fin de datos del gestor.');
-    return lines.join('\n');
+    _autoCtxCache = lines.join('\n');
+    _autoCtxAt    = Date.now();
+    return _autoCtxCache;
   } catch (e) {
     console.error('[sofia/autoContext]', e.message);
     return '';
