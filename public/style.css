@@ -3053,6 +3053,74 @@ tbody tr { transition: background .1s; }
   box-shadow: 0 6px 20px rgba(0,0,0,.5);
 }
 
+/* ── Sofia Widget — mejoras UI/UX ─────────────────────────── */
+
+/* Fix bug: --muted no existe, el texto del botón Cancelar WA era invisible */
+.sofia-wa-cancel { color: var(--text2); }
+
+/* Burbujas de chat con esquina direccional — mantiene feel industrial */
+.sofia-msg-user .sofia-msg-text {
+  border-radius: 12px 12px 3px 12px;
+}
+.sofia-msg-bot .sofia-msg-text {
+  border-radius: 3px 12px 12px 12px;
+}
+
+/* Touch targets: mínimo 36px de área de tap */
+.sofia-icon-btn {
+  min-width: 32px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sofia-toolbar-btn {
+  min-width: 32px;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Botón send: touch target mínimo */
+#sofia-send { min-width: 36px; min-height: 36px; }
+
+/* Panel: limitar altura en pantallas bajas */
+.sofia-panel { max-height: min(540px, 72dvh); }
+
+/* Scrollbar del chat */
+.sofia-messages {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+/* Focus visible en botones WA */
+.sofia-wa-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── Vista Semanal — mejoras UI/UX ────────────────────────── */
+
+/* Cards son clickeables, indicarlo */
+.sem-card { cursor: pointer; }
+
+/* Hover más visible */
+.sem-card:hover {
+  border-color: rgba(240,160,48,.5);
+  background: var(--bg3);
+}
+
+/* KPIs distribuidos uniformemente en pantalla ancha */
+.sem-kpi { flex: 1; }
+
+/* Feedback hover en el summary de proyectos inactivos */
+.sem-inactive-details summary:hover { color: var(--text); }
+.sem-inactive-details summary {
+  color: var(--text2);
+  transition: color .15s;
+}
+
 /* ── Prefers reduced motion: desactivar todas las animaciones ── */
 @media (prefers-reduced-motion: reduce) {
   *,
