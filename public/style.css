@@ -6,6 +6,7 @@
 
 /* ── Dark Theme (default) ── */
 :root {
+  color-scheme: dark;
   --bg:       #0b0d10;
   --bg2:      #13161b;
   --bg3:      #1c2028;
@@ -33,6 +34,7 @@
 
 /* ── Flat Theme (claro) ── */
 [data-theme="flat"] {
+  color-scheme: light;
   --bg:       #f0f2f5;
   --bg2:      #ffffff;
   --bg3:      #e4e8ef;
@@ -139,6 +141,7 @@
 
 /* ── Tema Neumorphism ── */
 [data-theme="skeu"] {
+  color-scheme: light;
   --bg:       #E8EBF0;
   --bg2:      #E8EBF0;
   --bg3:      #D8DCE4;
@@ -2977,4 +2980,87 @@ tr.fila-yellow:hover td { background: rgba(240,192,48,.08); }
   padding: 12px 16px;
   border-top: 1px solid var(--border);
   flex-shrink: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   UX IMPROVEMENTS — v1.10.0
+   Accessibility · Focus · Motion · Interactions
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Color scheme: native dark UI (date pickers, scrollbars, forms) ── */
+:root { color-scheme: dark; }
+[data-theme="flat"]  { color-scheme: light; }
+[data-theme="skeu"]  { color-scheme: light; }
+
+/* ── Smooth scroll ── */
+html { scroll-behavior: smooth; }
+
+/* ── Text selection con acento ── */
+::selection { background: rgba(240,160,48,.28); color: var(--text); }
+
+/* ── Focus visible — anillo para navegación por teclado ── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius);
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* Los inputs ya usan box-shadow en focus, no duplicar el outline */
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible { outline: none; }
+
+/* ── Button: focus visible, disabled genérico, hovers mejorados ── */
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.btn:disabled,
+.btn[disabled] {
+  opacity: .35;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.btn-primary:hover    { background: var(--accent2); }
+.btn-secondary:hover  { border-color: rgba(240,160,48,.4); color: var(--text); }
+.btn-ghost:hover      { background: var(--bg3); color: var(--text); border-color: rgba(240,160,48,.3); }
+
+/* ── Loading state genérico para botones async ── */
+.btn.is-loading {
+  opacity: .6;
+  cursor: wait;
+  pointer-events: none;
+  gap: 8px;
+}
+.btn.is-loading::after {
+  content: '';
+  width: 11px;
+  height: 11px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin .55s linear infinite;
+  flex-shrink: 0;
+}
+
+/* ── Table row hover con transición ── */
+tbody tr { transition: background .1s; }
+
+/* ── Kanban card: hover más visible ── */
+.kanban-card:hover {
+  border-color: rgba(240,160,48,.5);
+  box-shadow: 0 6px 20px rgba(0,0,0,.5);
+}
+
+/* ── Prefers reduced motion: desactivar todas las animaciones ── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
