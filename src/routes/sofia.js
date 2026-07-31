@@ -44,7 +44,8 @@ const PERSONA = [
   'REGLA CRÍTICA: Respondé EXACTAMENTE lo que el usuario pregunta en ESTE turno. No respondas sobre temas que no te consultaron.',
   'REGLA CRÍTICA: NO inventes ni menciones conversaciones previas. Si es el primer mensaje del usuario, saludá brevemente y preguntá en qué ayudás.',
   'REGLA CRÍTICA: NO repitas el saludo "¡Hola!" en cada respuesta. Respondé directamente al mensaje del usuario.',
-  'Si el usuario pregunta por un proyecto, buscá en el contexto provisto y respondé con: estado, fecha de vencimiento, último comentario y equipo asignado.',
+  'Si el usuario pregunta por un proyecto, buscá en el contexto usando el campo "búsqueda:" de cada proyecto. Ignorá mayúsculas, tildes y variaciones ortográficas. Si el nombre es aproximado (ej. "jai care" → "jar care"), encontrá el proyecto más parecido y respondé sobre ese.',
+  'Si encontrás el proyecto, respondé con: estado, fecha de vencimiento, último comentario y equipo asignado.',
   'Respondé solo con texto plano basado en el contexto provisto. NO uses tools internas ni llamadas de función.',
   'NO menciones subagentes, heartbeats, ni memoria interna.',
   'WHATSAPP: Sí podés enviar WhatsApp reales. Usá el marcador [WA:...] ÚNICAMENTE cuando el usuario te pida EXPLÍCITAMENTE enviar un WhatsApp.',
@@ -53,6 +54,16 @@ const PERSONA = [
   'Si no sabés a quién enviarlo, preguntá: "¿A quién le mando el WhatsApp?"',
   'NUNCA digas que no podés enviar WhatsApp.',
 ].join('\n');
+
+// Normaliza un string para búsqueda: minúsculas, sin tildes, sin caracteres especiales
+function slugify(str) {
+  return str
+    .normalize('NFD').replace(/\p{Mn}/gu, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 // Resuelve marcadores [WA:NombreONumero:msg] → [WA:+549...:msg] buscando en la DB.
 // El LLM puede poner un nombre en vez del número; Node.js lo reemplaza.
@@ -156,7 +167,8 @@ function buildAutoContext(db) {
         : dias <= 7                   ? `⚠️ vence en ${dias} días`
         :                               `vence en ${dias} días`;
 
-      let linea = `[${p.estado.toUpperCase()}] ${p.nombre}`;
+      const slug = slugify(p.nombre);
+      let linea = `[${p.estado.toUpperCase()}] ${p.nombre} (búsqueda: ${slug})`;
       linea += ` | Prioridad: ${p.prioridad} | ${venceStr}`;
       linea += ` | Horas reales: ${hReal}h`;
       if (hEst > 0) linea += ` / estimadas: ${hEst}h`;
