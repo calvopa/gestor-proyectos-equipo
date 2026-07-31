@@ -134,7 +134,7 @@ const routes = {
   'dashboard':      renderDashboard,
   'semana':         () => renderSemana(),
   'resumen-horas':  renderResumenHoras,
-  'conversaciones': renderConversaciones,
+  'conversaciones': () => renderConversaciones(),
 };
 
 function navigate(route, params = {}) {

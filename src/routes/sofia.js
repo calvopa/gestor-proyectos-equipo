@@ -270,7 +270,7 @@ router.post('/chat', (req, res) => {
             const r = pdb.prepare('INSERT INTO sofia_conversations (session_key) VALUES (?)').run(sessionKey);
             conv = { id: r.lastInsertRowid };
           } else {
-            pdb.prepare('UPDATE sofia_conversations SET updated_at=datetime("now") WHERE id=?').run(conv.id);
+            pdb.prepare("UPDATE sofia_conversations SET updated_at=datetime('now') WHERE id=?").run(conv.id);
           }
           pdb.prepare('INSERT INTO sofia_messages (conversation_id, role, texto) VALUES (?,?,?)').run(conv.id, 'user', message);
           pdb.prepare('INSERT INTO sofia_messages (conversation_id, role, texto) VALUES (?,?,?)').run(conv.id, 'bot', text);
