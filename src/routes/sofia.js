@@ -65,6 +65,46 @@ function slugify(str) {
     .trim();
 }
 
+// Busca proyectos por nombre fuzzy en el mensaje del usuario y retorna los encontrados
+// para inyectarlos como contexto explícito, sin depender del LLM para el matching.
+function findMentionedProjects(message, db) {
+  const msgSlug = slugify(message);
+  const today = new Date();
+  const projects = db.prepare(`
+    SELECT p.nombre, p.estado, p.prioridad, p.fecha_fin_est,
+           p.last_comment_text, p.last_comment_by, p.descripcion,
+           COALESCE(SUM(CASE WHEN te.tipo != 'estimado' THEN te.duracion_seg ELSE 0 END), 0) AS seg_real,
+           GROUP_CONCAT(DISTINCT r.nombre) AS equipo
+    FROM projects p
+    LEFT JOIN time_entries te ON te.project_id = p.id
+    LEFT JOIN assignments a ON a.project_id = p.id
+    LEFT JOIN resources r ON r.id = a.resource_id
+    WHERE p.estado != 'cerrado'
+    GROUP BY p.id
+  `).all();
+
+  const found = [];
+  for (const p of projects) {
+    const pSlug = slugify(p.nombre);
+    const pWords = pSlug.split(' ').filter(w => w.length > 2);
+    if (pWords.some(w => msgSlug.includes(w))) {
+      const vence = p.fecha_fin_est ? new Date(p.fecha_fin_est) : null;
+      const dias  = vence ? Math.round((vence - today) / 86400000) : null;
+      const venceStr = !vence ? 'sin fecha límite'
+        : dias < 0  ? `VENCIDO hace ${Math.abs(dias)} días`
+        : dias === 0 ? 'VENCE HOY'
+        : `vence en ${dias} días`;
+      const h = Math.round(p.seg_real / 3600 * 10) / 10;
+      let info = `Proyecto encontrado: "${p.nombre}" — Estado: ${p.estado} | Prioridad: ${p.prioridad} | ${venceStr} | Horas: ${h}h`;
+      if (p.equipo) info += ` | Equipo: ${p.equipo}`;
+      if (p.descripcion) info += ` | Desc: ${p.descripcion.slice(0, 120)}`;
+      if (p.last_comment_text) info += ` | Último comentario (${p.last_comment_by || 'N/A'}): "${p.last_comment_text.slice(0, 100)}"`;
+      found.push(info);
+    }
+  }
+  return found;
+}
+
 // Resuelve marcadores [WA:NombreONumero:msg] → [WA:+549...:msg] buscando en la DB.
 // El LLM puede poner un nombre en vez del número; Node.js lo reemplaza.
 function resolveWaMarkers(text, db) {
@@ -245,7 +285,13 @@ router.post('/chat', (req, res) => {
   }
 
   const autoCtx = buildAutoContext(db);
-  const allContexts = autoCtx ? [autoCtx, ...(contexts || [])] : (contexts || []);
+  // Lookup fuzzy de proyectos mencionados en el mensaje — inyecta info exacta antes del contexto general
+  const mentionedCtx = findMentionedProjects(message, db);
+  const allContexts = [
+    ...(mentionedCtx.length ? mentionedCtx : []),
+    ...(autoCtx ? [autoCtx] : []),
+    ...(contexts || []),
+  ];
   const fullPrompt = buildPrompt(history, message, allContexts, waInstruction);
 
   const escaped = fullPrompt.replace(/'/g, "'\\''");
