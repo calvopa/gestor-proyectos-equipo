@@ -41,11 +41,13 @@ function detectWaTargetInText(text, resources) {
 const PERSONA = [
   'INSTRUCCIÓN OBLIGATORIA: Respondé SIEMPRE en español argentino. Nunca uses otro idioma.',
   'Sos Sofia, asistente senior de gestión de proyectos. Tono directo, profesional, modismos locales.',
+  'REGLA CRÍTICA: Respondé EXACTAMENTE lo que el usuario pregunta en este turno. No respondas sobre temas que no te consultaron.',
+  'REGLA CRÍTICA: NO inventes ni menciones conversaciones o turnos anteriores. Si es el primer mensaje, saludá y preguntá en qué ayudás.',
   'Respondé solo con texto plano basado en el contexto provisto. NO uses tools internas ni llamadas de función.',
   'NO menciones subagentes, heartbeats, ni memoria interna.',
-  'WHATSAPP: SÍ podés enviar WhatsApp reales.',
-  'Para enviar WA redactá el mensaje y terminá tu respuesta con el marcador: [WA:NombreApellido:texto del mensaje]',
-  'Ejemplo: [WA:PabloCalvo:Hacoaj vence en 5 días, revisá el estado del desarrollo.]',
+  'WHATSAPP: SÍ podés enviar WhatsApp reales. Usá el marcador [WA:...] ÚNICAMENTE cuando el usuario te pida EXPLÍCITAMENTE enviar un WhatsApp.',
+  'NO incluyas marcadores [WA:...] en respuestas sobre estados de proyectos, resúmenes ni consultas generales.',
+  'Para enviar WA: redactá el mensaje y terminá la respuesta con: [WA:NombreApellido:texto del mensaje]',
   'Si no sabés a quién enviarlo, preguntá: "¿A quién le mando el WhatsApp?"',
   'NUNCA digas que no podés enviar WhatsApp.',
 ].join(' ');
@@ -84,10 +86,12 @@ function buildPrompt(history, message, contexts, waInstruction) {
     parts.push('');
   }
 
-  // Último turno de historial para dar continuidad en flujos multi-mensaje
+  // Último turno de historial — solo para continuidad de flujos multi-mensaje.
+  // Se eliminan marcadores [WA:...] del bot para evitar que el LLM los imite.
   if (history.length > 0) {
     const last = history[history.length - 1];
-    parts.push(`Turno anterior — Usuario: "${last.user.slice(0, 100)}" | Sofia: "${last.bot.slice(0, 200)}"`);
+    const botClean = last.bot.replace(/\[WA[^\]]*\]/g, '(WhatsApp enviado)').slice(0, 200);
+    parts.push(`Turno anterior — Usuario: "${last.user.slice(0, 100)}" | Sofia: "${botClean}"`);
     parts.push('');
   }
 
@@ -192,6 +196,15 @@ router.post('/chat', (req, res) => {
   // ── Rastrear estado WA de la sesión ─────────────────────
   const waFlow = waFlows.get(sessionKey) || {};
   const isWaMention = /whatsap+/i.test(message);
+
+  // Si el usuario hace una pregunta nueva (no WA) y había un flujo WA activo, limpiarlo.
+  // Evita que el flujo WA persista cuando el usuario cambia de tema.
+  const isNewQuery = /^(dame|cuál|cuál|qué|cómo|cual|que|como|muestra|listar|contá|resumí|describí|explicá|estado|info|información)/i.test(message.trim());
+  if (waFlow.wantWa && !isWaMention && isNewQuery) {
+    waFlow.wantWa = false;
+    waFlow.personName = null;
+    waFlow.telefono = null;
+  }
 
   if (isWaMention) waFlow.wantWa = true;
 
