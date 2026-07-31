@@ -12,6 +12,16 @@ router.post('/sheets', async (req, res) => {
     return res.status(400).json({ error: 'sheets_webhook_url no configurada en Ajustes' });
   }
 
+  // Prevenir SSRF: solo se permiten URLs externas con HTTPS
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') {
+      return res.status(400).json({ error: 'sheets_webhook_url debe usar HTTPS' });
+    }
+  } catch {
+    return res.status(400).json({ error: 'sheets_webhook_url no es una URL válida' });
+  }
+
   try {
     const bodyStr = JSON.stringify(req.body);
     const projectCount = req.body?.projects?.length ?? 'n/a';

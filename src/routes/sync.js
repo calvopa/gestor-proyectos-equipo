@@ -4,8 +4,13 @@ const { runSync } = require('../services/clickup');
 const { getDb } = require('../db');
 
 router.post('/clickup', async (req, res) => {
-  const result = await runSync();
-  res.json(result);
+  try {
+    const result = await runSync();
+    res.json(result);
+  } catch (err) {
+    console.error('[sync/clickup]', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.get('/status', (req, res) => {

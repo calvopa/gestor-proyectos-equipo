@@ -13,7 +13,7 @@ const MAX_BOT_HISTORY_CHARS = 400;
 function sshArgs(remoteCmd) {
   const args = [];
   if (OPENCLAW_SSH_KEY) args.push('-i', OPENCLAW_SSH_KEY);
-  args.push('-o', 'StrictHostKeyChecking=no', OPENCLAW_SSH_HOST, remoteCmd);
+  args.push('-o', 'StrictHostKeyChecking=accept-new', OPENCLAW_SSH_HOST, remoteCmd);
   return args;
 }
 
@@ -21,6 +21,21 @@ function sshArgs(remoteCmd) {
 const histories = new Map();
 // Estado de flujo WA por sesión: { wantWa, personName, telefono }
 const waFlows = new Map();
+// Último acceso por sesión — para TTL de limpieza
+const sessionLastSeen = new Map();
+
+const SESSION_TTL_MS = 4 * 60 * 60 * 1000; // 4 horas sin actividad → limpiar
+
+setInterval(() => {
+  const cutoff = Date.now() - SESSION_TTL_MS;
+  for (const [key, ts] of sessionLastSeen) {
+    if (ts < cutoff) {
+      histories.delete(key);
+      waFlows.delete(key);
+      sessionLastSeen.delete(key);
+    }
+  }
+}, 60 * 60 * 1000); // chequear cada hora
 
 function getHistory(key) {
   if (!histories.has(key)) histories.set(key, []);
@@ -241,7 +256,8 @@ router.post('/chat', (req, res) => {
   const { message, sessionId, contexts } = req.body;
   if (!message?.trim()) return res.status(400).json({ error: 'message requerido' });
 
-  const sessionKey = sessionId || 'agent:main:gestor:default';
+  const sessionKey = sessionId || randomUUID();
+  sessionLastSeen.set(sessionKey, Date.now());
   const history = getHistory(sessionKey);
 
   const db = getDb();
@@ -443,6 +459,15 @@ router.post('/whatsapp-send', (req, res) => {
     return res.status(400).json({ error: 'to y message son requeridos' });
   }
   const normalized = normalizePhone(to);
+
+  // Solo se puede enviar a números registrados en recursos del equipo
+  const wdb = getDb();
+  const knownNumbers = wdb.prepare('SELECT telefono FROM resources WHERE activo=1 AND telefono IS NOT NULL').all().map(r => r.telefono);
+  if (!knownNumbers.includes(normalized)) {
+    console.warn('[sofia/whatsapp-send] intento de envío a número no registrado:', normalized);
+    return res.status(403).json({ error: 'Número no registrado en Recursos. Solo se puede enviar WhatsApp a miembros del equipo.' });
+  }
+
   const toEscaped = normalized.replace(/'/g, "'\\''");
   const msgEscaped = message.trim().replace(/'/g, "'\\''");
   const remoteCmd = `openclaw message send --channel whatsapp --target '${toEscaped}' --message '${msgEscaped}' --json`;
