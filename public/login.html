@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Acceso — Gestor de Proyectos</title>
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    body {
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+      margin: 0;
+    }
+
+    .login-wrap {
+      width: 100%;
+      max-width: 360px;
+      padding: 1.5rem;
+    }
+
+    .login-logo {
+      display: flex;
+      align-items: center;
+      gap: .6rem;
+      margin-bottom: 2rem;
+    }
+
+    .login-logo svg {
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+    }
+
+    .login-logo-text {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 1.05rem;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .login-logo-text span {
+      display: block;
+      font-size: .65rem;
+      font-weight: 400;
+      color: var(--text2);
+      letter-spacing: .08em;
+    }
+
+    .login-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 1.75rem;
+    }
+
+    .login-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+      margin: 0 0 1.25rem;
+      letter-spacing: .03em;
+      text-transform: uppercase;
+    }
+
+    .login-field {
+      margin-bottom: 1rem;
+    }
+
+    .login-field label {
+      display: block;
+      font-size: .7rem;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--text2);
+      margin-bottom: .375rem;
+    }
+
+    .login-field input {
+      width: 100%;
+      box-sizing: border-box;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: .875rem;
+      padding: .5rem .75rem;
+      outline: none;
+      transition: border-color .15s;
+    }
+
+    .login-field input:focus {
+      border-color: var(--amber);
+    }
+
+    .login-error {
+      background: rgba(220, 50, 50, .12);
+      border: 1px solid rgba(220, 50, 50, .3);
+      border-radius: 3px;
+      color: #e07070;
+      font-size: .8rem;
+      padding: .5rem .75rem;
+      margin-bottom: 1rem;
+      display: none;
+    }
+
+    .login-error.visible {
+      display: block;
+    }
+
+    .login-submit {
+      width: 100%;
+      margin-top: .25rem;
+    }
+
+    .login-footer {
+      margin-top: 1.25rem;
+      text-align: center;
+      font-size: .72rem;
+      color: var(--text2);
+      letter-spacing: .04em;
+    }
+  </style>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-logo">
+      <svg viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <rect width="28" height="28" rx="3" fill="#F0A030" fill-opacity=".15"/>
+        <rect x="5" y="8" width="18" height="2" rx="1" fill="#F0A030"/>
+        <rect x="5" y="13" width="12" height="2" rx="1" fill="#F0A030" fill-opacity=".7"/>
+        <rect x="5" y="18" width="8" height="2" rx="1" fill="#F0A030" fill-opacity=".4"/>
+        <circle cx="21" cy="19" r="4" fill="#F0A030" fill-opacity=".2" stroke="#F0A030" stroke-width="1.5"/>
+        <path d="M19.5 19l1 1 2-2" stroke="#F0A030" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="login-logo-text">
+        Gestor
+        <span>Grupo CESA · Proyectos</span>
+      </div>
+    </div>
+
+    <div class="login-card">
+      <p class="login-title">Acceso</p>
+
+      <div id="error-msg" class="login-error"></div>
+
+      <form method="POST" action="/login">
+        <div class="login-field">
+          <label for="username">Usuario</label>
+          <input id="username" name="username" type="text" autocomplete="username" autofocus required />
+        </div>
+        <div class="login-field">
+          <label for="password">Contraseña</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required />
+        </div>
+        <button type="submit" class="btn btn-primary login-submit">Ingresar</button>
+      </form>
+    </div>
+
+    <p class="login-footer">Herramienta interna · Acceso restringido</p>
+  </div>
+
+  <script>
+    (function () {
+      const params = new URLSearchParams(location.search);
+      const err = params.get('error');
+      const el = document.getElementById('error-msg');
+      if (err === '1') { el.textContent = 'Usuario o contraseña incorrectos.'; el.classList.add('visible'); }
+      if (err === 'config') { el.textContent = 'Error de configuración del servidor. Contactá al administrador.'; el.classList.add('visible'); }
+    })();
+
+    // theme init (igual que app.js)
+    (function () {
+      const saved = localStorage.getItem('gestor_theme') || 'dark';
+      const valid = ['flat', 'skeu'];
+      document.documentElement.dataset.theme = valid.includes(saved) ? saved : '';
+    })();
+  </script>
+</body>
+</html>

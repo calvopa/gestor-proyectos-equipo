@@ -5,6 +5,7 @@ const api = {
       ...options,
       body: options.body ? JSON.stringify(options.body) : undefined,
     });
+    if (res.status === 401) { window.location.href = '/login'; return; }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
     return data;
