@@ -80,6 +80,16 @@ const api = {
   sofiaWhatsappSend: (to, message) =>
     api._fetch('/api/sofia/whatsapp-send', { method: 'POST', body: { to, message } }),
 
+  // Sprints
+  getSprints: () => api._fetch('/api/sprints'),
+  createSprint: (body) => api._fetch('/api/sprints', { method: 'POST', body }),
+  updateSprint: (id, body) => api._fetch(`/api/sprints/${id}`, { method: 'PUT', body }),
+  deleteSprint: (id) => api._fetch(`/api/sprints/${id}`, { method: 'DELETE' }),
+  getSprintBoard: (id) => api._fetch(`/api/sprints/${id}/board`),
+  addProjectToSprint: (sid, pid, body = {}) => api._fetch(`/api/sprints/${sid}/projects/${pid}`, { method: 'POST', body }),
+  updateSprintProject: (sid, pid, body) => api._fetch(`/api/sprints/${sid}/projects/${pid}`, { method: 'PATCH', body }),
+  removeProjectFromSprint: (sid, pid) => api._fetch(`/api/sprints/${sid}/projects/${pid}`, { method: 'DELETE' }),
+
   // Sofia — Conversaciones (bandeja persistida)
   sofiaConversations: (p = {}) => api._fetch('/api/sofia/conversations?' + new URLSearchParams(p)),
   sofiaConversation:  (id)     => api._fetch(`/api/sofia/conversations/${id}`),

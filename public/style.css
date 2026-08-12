@@ -3121,6 +3121,145 @@ tbody tr { transition: background .1s; }
   transition: color .15s;
 }
 
+/* ── Sprints ──────────────────────────────────────────────── */
+.sprint-page { display: flex; flex-direction: column; gap: 14px; }
+
+.sprint-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.sprint-select {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  min-width: 280px;
+  cursor: pointer;
+}
+.sprint-select:focus { outline: none; border-color: var(--accent); }
+
+.sprint-info-bar {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 16px;
+}
+
+.sprint-info-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.sprint-estado-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 99px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sprint-objetivo {
+  font-size: 13px;
+  color: var(--text2);
+  font-style: italic;
+}
+
+.sprint-fechas {
+  font-size: 12px;
+  color: var(--text2);
+  white-space: nowrap;
+}
+
+.sprint-progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.sprint-progress-label { font-size: 12px; color: var(--text2); }
+.sprint-progress-bar {
+  width: 120px;
+  height: 6px;
+  background: var(--bg2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.sprint-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width .4s ease;
+}
+
+.sprint-info-actions { display: flex; gap: 6px; align-items: center; }
+
+.sprint-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 900px) { .sprint-board { grid-template-columns: 1fr; } }
+
+.sprint-col {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.sprint-col-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  border-bottom: 2px solid transparent;
+}
+.sprint-col-backlog    { color: #7a8494; border-bottom-color: #252b35; }
+.sprint-col-activos    { color: #5090d0; border-bottom-color: #1a3050; }
+.sprint-col-completados{ color: #3aaa68; border-bottom-color: #143020; }
+
+.sprint-cards {
+  min-height: 80px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sprint-col.drag-over .sprint-cards {
+  background: rgba(240,160,48,.05);
+  border-radius: 4px;
+}
+
+.sprint-drop-hint {
+  font-size: 12px;
+  color: var(--text3, var(--text2));
+  text-align: center;
+  padding: 18px 8px;
+  opacity: .5;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+}
+
 /* ── Prefers reduced motion: desactivar todas las animaciones ── */
 @media (prefers-reduced-motion: reduce) {
   *,

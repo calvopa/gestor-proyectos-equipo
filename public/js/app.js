@@ -135,6 +135,7 @@ const routes = {
   'semana':         () => renderSemana(),
   'resumen-horas':  renderResumenHoras,
   'conversaciones': () => renderConversaciones(),
+  'sprints':        renderSprints,
 };
 
 function navigate(route, params = {}) {
@@ -2525,6 +2526,276 @@ async function renderResumenHoras({ periodo = '7d', soloConHoras = false, vista 
   main.querySelectorAll('.rh-card-clickable').forEach(card =>
     card.addEventListener('click', () => navigate('project-detail', { id: card.dataset.projectId }))
   );
+}
+
+// ── Sprints ────────────────────────────────────────────────
+async function renderSprints() {
+  const main = document.getElementById('main-content');
+  main.innerHTML = '<div class="spinner"></div>';
+
+  const sprints = await api.getSprints();
+
+  let sid = parseInt(localStorage.getItem('gestor_sprint_id') || '0');
+  if (!sprints.find(s => s.id === sid)) {
+    const active = sprints.find(s => s.estado === 'activo') || sprints[0];
+    sid = active?.id || 0;
+    if (sid) localStorage.setItem('gestor_sprint_id', sid);
+  }
+
+  const selectOpts = sprints.length === 0
+    ? '<option value="">-- Sin sprints --</option>'
+    : sprints.map(s => {
+        const label = `${escHtml(s.nombre)} (${s.fecha_inicio} → ${s.fecha_fin})`;
+        return `<option value="${s.id}" ${s.id === sid ? 'selected' : ''}>${label}</option>`;
+      }).join('');
+
+  main.innerHTML = `
+    <div class="sprint-page">
+      <div class="sprint-topbar">
+        <div class="sprint-selector-wrap">
+          <select id="sprint-select" class="sprint-select">${selectOpts}</select>
+        </div>
+        <button id="btn-nuevo-sprint" class="btn btn-primary btn-sm">+ Nuevo Sprint</button>
+      </div>
+      <div id="sprint-info-bar"></div>
+      <div id="sprint-board-wrap"></div>
+    </div>
+  `;
+
+  function sprintCardHtml(p, col) {
+    const salud = calcSalud(p);
+    const saludHtml = salud.level !== 'grey'
+      ? `<span class="kanban-salud kanban-salud-${salud.level}">${escHtml(salud.titulo)}</span>` : '';
+    const tecs = p.tecnicos ? p.tecnicos.split(',').filter(Boolean) : [];
+    const hoy = Date.now();
+    const vencido   = p.fecha_fin_est && new Date(p.fecha_fin_est) < hoy;
+    const proxVence = p.fecha_fin_est && !vencido && Math.floor((new Date(p.fecha_fin_est) - hoy) / 86400000) <= 5;
+    const fechaHtml = p.fecha_fin_est
+      ? `<span class="${vencido ? 'kanban-fecha-red' : proxVence ? 'kanban-fecha-yellow' : 'kanban-fecha'}">${p.fecha_fin_est}</span>` : '';
+    return `
+      <div class="kanban-card sprint-card" draggable="true"
+           data-id="${p.id}" data-col="${col}" data-estado="${escHtml(p.estado)}">
+        <div class="kanban-card-title">${escHtml(p.nombre)}</div>
+        <div class="kanban-card-meta">
+          ${badgeEstado(p.estado)}${badgePrio(p.prioridad)}${saludHtml}${fechaHtml}
+        </div>
+        ${tecs.length ? `<div class="kanban-card-tecs">${tecs.map(t => `<span class="kanban-tec">${escHtml(t)}</span>`).join('')}</div>` : ''}
+      </div>`;
+  }
+
+  function renderSprintInfoBar(sprint) {
+    const total = sprint.total_projects || 0;
+    const done  = sprint.completed_projects || 0;
+    const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
+    const estadoMeta = {
+      planificado: { label: 'Planificado', color: '#7a8494' },
+      activo:      { label: 'Activo',      color: '#5090d0' },
+      completado:  { label: 'Completado',  color: '#3aaa68' },
+    };
+    const m = estadoMeta[sprint.estado] || estadoMeta.planificado;
+    document.getElementById('sprint-info-bar').innerHTML = `
+      <div class="sprint-info-bar">
+        <div class="sprint-info-left">
+          <span class="sprint-estado-badge" style="background:${m.color}20;color:${m.color};border:1px solid ${m.color}50">${m.label}</span>
+          ${sprint.objetivo ? `<span class="sprint-objetivo">${escHtml(sprint.objetivo)}</span>` : ''}
+          <span class="sprint-fechas">📅 ${sprint.fecha_inicio} → ${sprint.fecha_fin}</span>
+        </div>
+        <div class="sprint-progress-wrap">
+          <span class="sprint-progress-label">${done}/${total} completados</span>
+          <div class="sprint-progress-bar"><div class="sprint-progress-fill" style="width:${pct}%"></div></div>
+        </div>
+        <div class="sprint-info-actions">
+          ${sprint.estado === 'planificado' ? `<button class="btn btn-sm btn-primary" data-sprint-action="activar">▶ Activar</button>` : ''}
+          ${sprint.estado === 'activo' ? `<button class="btn btn-sm" style="background:#3aaa68;color:#fff" data-sprint-action="completar">✓ Completar</button>` : ''}
+          <button class="btn btn-sm btn-ghost" data-sprint-action="editar">✏ Editar</button>
+          <button class="btn btn-sm btn-ghost" style="color:var(--red)" data-sprint-action="eliminar">🗑</button>
+        </div>
+      </div>
+    `;
+    document.querySelectorAll('[data-sprint-action]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const action = btn.dataset.sprintAction;
+        if (action === 'activar') {
+          await api.updateSprint(sprint.id, { estado: 'activo' });
+          toast('Sprint activado', 'success');
+          renderSprints();
+        } else if (action === 'completar') {
+          await api.updateSprint(sprint.id, { estado: 'completado' });
+          toast('Sprint completado', 'success');
+          renderSprints();
+        } else if (action === 'editar') {
+          showSprintModal(sprint, () => renderSprints());
+        } else if (action === 'eliminar') {
+          if (!confirm(`¿Eliminar "${sprint.nombre}"? Se desasignarán todos los proyectos.`)) return;
+          await api.deleteSprint(sprint.id);
+          localStorage.removeItem('gestor_sprint_id');
+          toast('Sprint eliminado', 'info');
+          renderSprints();
+        }
+      });
+    });
+  }
+
+  function renderBoard(board) {
+    const sprintId = board.sprint.id;
+    const wrap = document.getElementById('sprint-board-wrap');
+
+    const colHtml = (col, label, items) => {
+      const emptyHint = items.length === 0
+        ? `<div class="sprint-drop-hint">Arrastrá proyectos aquí</div>` : '';
+      return `
+        <div class="sprint-col kanban-col" data-col="${col}">
+          <div class="sprint-col-header sprint-col-${col}">
+            <span>${label}</span>
+            <span class="kanban-col-count">${items.length}</span>
+          </div>
+          <div class="sprint-cards kanban-cards" data-col="${col}">
+            ${emptyHint}${items.map(p => sprintCardHtml(p, col)).join('')}
+          </div>
+        </div>`;
+    };
+
+    wrap.innerHTML = `
+      <div class="sprint-board">
+        ${colHtml('backlog',     '📋 BACKLOG',    board.backlog)}
+        ${colHtml('activos',     '🏃 EN SPRINT',  board.activos)}
+        ${colHtml('completados', '✅ COMPLETADO', board.completados)}
+      </div>`;
+
+    let dragging = null;
+
+    wrap.querySelectorAll('.sprint-card').forEach(card => {
+      card.addEventListener('dragstart', () => { dragging = card; card.classList.add('dragging'); });
+      card.addEventListener('dragend',   () => { dragging = null; card.classList.remove('dragging'); });
+    });
+
+    wrap.querySelectorAll('.sprint-col').forEach(col => {
+      col.addEventListener('dragover',  e => { e.preventDefault(); col.classList.add('drag-over'); });
+      col.addEventListener('dragleave', e => {
+        if (!col.contains(e.relatedTarget)) col.classList.remove('drag-over');
+      });
+      col.addEventListener('drop', async e => {
+        e.preventDefault();
+        col.classList.remove('drag-over');
+        if (!dragging) return;
+        const projectId = dragging.dataset.id;
+        const fromCol   = dragging.dataset.col;
+        const toCol     = col.dataset.col;
+        if (fromCol === toCol) return;
+        try {
+          if (toCol === 'backlog') {
+            await api.removeProjectFromSprint(sprintId, projectId);
+          } else if (toCol === 'activos') {
+            if (fromCol === 'backlog') {
+              await api.addProjectToSprint(sprintId, projectId, { estado: 'en_curso' });
+            } else {
+              await api.updateSprintProject(sprintId, projectId, { estado: 'en_curso' });
+            }
+          } else if (toCol === 'completados') {
+            if (fromCol === 'backlog') {
+              await api.addProjectToSprint(sprintId, projectId, { estado: 'completado' });
+            } else {
+              await api.updateSprintProject(sprintId, projectId, { estado: 'completado' });
+            }
+          }
+          await loadBoard(sprintId);
+        } catch (err) {
+          toast(err.message, 'error');
+        }
+      });
+    });
+  }
+
+  async function loadBoard(sprintId) {
+    if (!sprintId) {
+      document.getElementById('sprint-info-bar').innerHTML = '';
+      document.getElementById('sprint-board-wrap').innerHTML = `
+        <div class="empty">
+          <p style="font-size:2.5rem;margin-bottom:.5rem">🏃</p>
+          <p>No hay sprints todavía.<br>Creá uno con el botón <strong>+ Nuevo Sprint</strong>.</p>
+        </div>`;
+      return;
+    }
+    const board = await api.getSprintBoard(sprintId);
+    renderSprintInfoBar(board.sprint);
+    renderBoard(board);
+  }
+
+  function showSprintModal(sprint, onSave) {
+    const isEdit = !!sprint;
+    const today    = new Date().toISOString().slice(0, 10);
+    const twoWeeks = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+    const modal = el(`
+      <div class="modal-backdrop">
+        <div class="modal" style="max-width:480px">
+          <div class="modal-header">
+            <h3>${isEdit ? 'Editar Sprint' : 'Nuevo Sprint'}</h3>
+            <button class="modal-close-x btn btn-ghost btn-sm">✕</button>
+          </div>
+          <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
+            <label class="form-label">Nombre *
+              <input id="sm-nombre" class="form-input" type="text" value="${escHtml(sprint?.nombre || '')}" placeholder="Sprint 12" required>
+            </label>
+            <label class="form-label">Objetivo
+              <input id="sm-objetivo" class="form-input" type="text" value="${escHtml(sprint?.objetivo || '')}" placeholder="Meta del sprint">
+            </label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+              <label class="form-label">Inicio *
+                <input id="sm-inicio" class="form-input" type="date" value="${sprint?.fecha_inicio || today}">
+              </label>
+              <label class="form-label">Fin *
+                <input id="sm-fin" class="form-input" type="date" value="${sprint?.fecha_fin || twoWeeks}">
+              </label>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-ghost modal-cancel-btn">Cancelar</button>
+            <button id="sm-save" class="btn btn-primary">${isEdit ? 'Guardar cambios' : 'Crear Sprint'}</button>
+          </div>
+        </div>
+      </div>`);
+    document.body.appendChild(modal);
+    const close = () => modal.remove();
+    modal.querySelector('.modal-close-x').addEventListener('click', close);
+    modal.querySelector('.modal-cancel-btn').addEventListener('click', close);
+    modal.addEventListener('click', e => { if (e.target === modal) close(); });
+    modal.querySelector('#sm-nombre').focus();
+    modal.querySelector('#sm-save').addEventListener('click', async () => {
+      const nombre      = modal.querySelector('#sm-nombre').value.trim();
+      const objetivo    = modal.querySelector('#sm-objetivo').value.trim();
+      const fecha_inicio = modal.querySelector('#sm-inicio').value;
+      const fecha_fin   = modal.querySelector('#sm-fin').value;
+      if (!nombre || !fecha_inicio || !fecha_fin) { toast('Completá nombre, inicio y fin', 'warn'); return; }
+      if (fecha_fin < fecha_inicio)               { toast('La fecha fin debe ser posterior al inicio', 'warn'); return; }
+      try {
+        let result;
+        if (isEdit) {
+          await api.updateSprint(sprint.id, { nombre, objetivo, fecha_inicio, fecha_fin });
+        } else {
+          result = await api.createSprint({ nombre, objetivo, fecha_inicio, fecha_fin });
+          localStorage.setItem('gestor_sprint_id', result.id);
+        }
+        close();
+        toast(isEdit ? 'Sprint actualizado' : 'Sprint creado', 'success');
+        onSave?.();
+      } catch (err) {
+        toast(err.message, 'error');
+      }
+    });
+  }
+
+  document.getElementById('sprint-select')?.addEventListener('change', e => {
+    const newId = parseInt(e.target.value) || 0;
+    localStorage.setItem('gestor_sprint_id', newId);
+    sid = newId;
+    loadBoard(newId);
+  });
+
+  document.getElementById('btn-nuevo-sprint')?.addEventListener('click', () => {
+    showSprintModal(null, () => renderSprints());
+  });
+
+  await loadBoard(sid);
 }
 
 // ── Boot ──────────────────────────────────────────────────

@@ -32,6 +32,7 @@ app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/semana',    require('./routes/semana'));
 app.use('/api/export',   require('./routes/export'));
 app.use('/api/sofia',    require('./routes/sofia'));
+app.use('/api/sprints',  require('./routes/sprints'));
 
 // SPA fallback (solo usuarios autenticados llegan aquí)
 app.get('*', (req, res) => {
