@@ -613,10 +613,10 @@ async function semanaExportSheets() {
   btn.disabled = true;
   btn.textContent = '⏳ Exportando...';
 
-  // Strip events (not used by Apps Script) to reduce payload size
+  // Strip fields not used by Apps Script to avoid breaking its row mapping
   const payload = {
     ...data,
-    projects: projects.map(({ events: _e, ...p }) => p),
+    projects: projects.map(({ events: _e, sprint_comment: _sc, sprint_comment_at: _sca, ...p }) => p),
   };
 
   try {
