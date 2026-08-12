@@ -766,6 +766,107 @@ textarea { resize: vertical; min-height: 80px; }
 }
 .filters input, .filters select { width: auto; flex: 1; min-width: 140px; }
 
+/* ── Filtros de proyectos ── */
+.proj-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.proj-filters-top {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.proj-filters-top input[type="text"] {
+  flex: 2;
+  min-width: 180px;
+}
+
+.proj-filters-top select {
+  flex: 1;
+  min-width: 130px;
+  max-width: 180px;
+}
+
+/* ── Estado chips ── */
+.estado-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.estado-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 13px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text2);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color .12s, color .12s, background .12s;
+  white-space: nowrap;
+}
+.estado-chip:hover {
+  border-color: var(--text2);
+  color: var(--text);
+}
+
+/* "Todos" activo: amber accent */
+.estado-chip-all.active {
+  background: rgba(240,160,48,.12);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Backlog */
+.estado-chip-backlog.active {
+  background: #1c2230;
+  border-color: #4a5060;
+  color: #8a9ab0;
+}
+
+/* En curso */
+.estado-chip-en_curso.active {
+  background: #0e1e38;
+  border-color: #3070b0;
+  color: #5090d0;
+}
+
+/* Pausado */
+.estado-chip-pausado.active {
+  background: #28180a;
+  border-color: #a07030;
+  color: #c09050;
+}
+
+/* Cerrado */
+.estado-chip-cerrado.active {
+  background: #0a2018;
+  border-color: #258a50;
+  color: #3aaa68;
+}
+
+[data-theme="flat"] .estado-chip {
+  background: var(--bg2);
+}
+[data-theme="flat"] .estado-chip-all.active    { background: rgba(200,120,40,.1); }
+[data-theme="flat"] .estado-chip-backlog.active { background: #e8eaf0; border-color: #7a8494; color: #3a4050; }
+[data-theme="flat"] .estado-chip-en_curso.active { background: #d8e8f8; border-color: #3070b0; color: #1050a0; }
+[data-theme="flat"] .estado-chip-pausado.active { background: #f8e8d0; border-color: #a07030; color: #7a4010; }
+[data-theme="flat"] .estado-chip-cerrado.active { background: #d0f0e0; border-color: #258a50; color: #0a5030; }
+
 /* ── Kanban ── */
 .kanban {
   display: grid;

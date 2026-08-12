@@ -420,27 +420,33 @@ async function renderProjects(params = {}) {
         <button class="btn btn-primary" id="btn-new-project">＋ Nuevo proyecto</button>
       </div>
     </div>
-    <div class="filters">
-      <input type="text" id="f-search" placeholder="Buscar..." value="${escHtml(search)}" style="flex:2;min-width:160px">
-      <select id="f-estado">
-        <option value="">Todos los estados</option>
-        ${['backlog','en_curso','pausado','cerrado'].map(e => `<option value="${e}" ${estado===e?'selected':''}>${e.replace('_',' ')}</option>`).join('')}
-      </select>
-      <select id="f-prioridad">
-        <option value="">Todas las prioridades</option>
-        ${['baja','media','alta','critica'].map(p => `<option value="${p}" ${prioridad===p?'selected':''}>${p}</option>`).join('')}
-      </select>
-      <select id="f-fase">
-        <option value="">Todas las fases</option>
-        ${phases.map(f => `<option value="${escHtml(f)}" ${fase===f?'selected':''}>${escHtml(f)}</option>`).join('')}
-      </select>
-      <select id="f-tecnico">
-        <option value="">Todos los técnicos</option>
-        ${resources.map(r => `<option value="${r.id}" ${tecnico===String(r.id)?'selected':''}>${escHtml(r.nombre)}</option>`).join('')}
-      </select>
-      <button class="btn ${soloRiesgo ? 'btn-primary' : 'btn-ghost'} btn-sm" id="f-riesgo" title="Mostrar solo en riesgo o con atención">
-        ⚠ ${soloRiesgo ? 'Todos' : 'En riesgo'}
-      </button>
+    <div class="proj-filters">
+      <div class="proj-filters-top">
+        <input type="text" id="f-search" placeholder="🔍 Buscar proyecto..." value="${escHtml(search)}">
+        <select id="f-prioridad">
+          <option value="">Prioridad</option>
+          ${['baja','media','alta','critica'].map(p => `<option value="${p}" ${prioridad===p?'selected':''}>${p.charAt(0).toUpperCase()+p.slice(1)}</option>`).join('')}
+        </select>
+        <select id="f-tecnico">
+          <option value="">Técnico</option>
+          ${resources.map(r => `<option value="${r.id}" ${tecnico===String(r.id)?'selected':''}>${escHtml(r.nombre)}</option>`).join('')}
+        </select>
+        ${phases.length ? `<select id="f-fase">
+          <option value="">Fase ClickUp</option>
+          ${phases.map(f => `<option value="${escHtml(f)}" ${fase===f?'selected':''}>${escHtml(f)}</option>`).join('')}
+        </select>` : ''}
+        <button class="btn btn-sm ${soloRiesgo?'btn-primary':'btn-ghost'}" id="f-riesgo" title="Solo proyectos en riesgo o con atención">⚠ Riesgo</button>
+        ${(search||estado||prioridad||fase||tecnico||soloRiesgo) ? `<button class="btn btn-ghost btn-sm" id="f-clear" title="Limpiar filtros">✕ Limpiar</button>` : ''}
+      </div>
+      <div class="estado-chips">
+        ${[
+          { v:'',        label:'Todos',    icon:'' },
+          { v:'backlog', label:'Backlog',  icon:'📋' },
+          { v:'en_curso',label:'En curso', icon:'🔵' },
+          { v:'pausado', label:'Pausado',  icon:'⏸' },
+          { v:'cerrado', label:'Cerrado',  icon:'✓'  },
+        ].map(s => `<button class="estado-chip estado-chip-${s.v||'all'} ${estado===s.v?'active':''}" data-estado="${s.v}">${s.icon?s.icon+' ':''}${s.label}</button>`).join('')}
+      </div>
     </div>
     <div class="table-wrap">
       <table>
@@ -530,11 +536,11 @@ async function renderProjects(params = {}) {
   // Helper para leer filtros actuales
   function getFilters() {
     return {
-      search:   document.getElementById('f-search')?.value   || '',
-      estado:   document.getElementById('f-estado')?.value   || '',
-      prioridad:document.getElementById('f-prioridad')?.value|| '',
-      fase:     document.getElementById('f-fase')?.value     || '',
-      tecnico:  document.getElementById('f-tecnico')?.value  || '',
+      search:    document.getElementById('f-search')?.value    || '',
+      estado:    document.querySelector('.estado-chip.active')?.dataset.estado || '',
+      prioridad: document.getElementById('f-prioridad')?.value || '',
+      fase:      document.getElementById('f-fase')?.value      || '',
+      tecnico:   document.getElementById('f-tecnico')?.value   || '',
     };
   }
 
@@ -566,12 +572,21 @@ async function renderProjects(params = {}) {
     const inp = document.getElementById('f-search');
     if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
   }
-  ['f-estado','f-prioridad','f-fase','f-tecnico'].forEach(id => {
+  ['f-prioridad','f-fase','f-tecnico'].forEach(id => {
     document.getElementById(id)?.addEventListener('change', () =>
       renderProjects({ ...getFilters(), sort, dir, soloRiesgo }));
   });
-  document.getElementById('f-riesgo').addEventListener('click', () =>
+
+  // Chips de estado
+  main.querySelectorAll('.estado-chip').forEach(chip => {
+    chip.addEventListener('click', () =>
+      renderProjects({ ...getFilters(), estado: chip.dataset.estado, sort, dir, soloRiesgo }));
+  });
+
+  document.getElementById('f-riesgo')?.addEventListener('click', () =>
     renderProjects({ ...getFilters(), sort, dir, soloRiesgo: !soloRiesgo }));
+  document.getElementById('f-clear')?.addEventListener('click', () =>
+    renderProjects({ search: '', estado: '', prioridad: '', fase: '', tecnico: '', sort, dir, soloRiesgo: false }));
 
   main.querySelectorAll('th[data-col]').forEach(th => {
     th.addEventListener('click', () => renderProjects({
