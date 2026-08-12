@@ -460,6 +460,11 @@ function normalizePhone(raw) {
   return `+549${digits}`;                             // número local → agrega +549
 }
 
+// Rate limit: max 10 WA sends per hour (in-memory, resets on restart)
+const waSendLog = [];
+const WA_RATE_LIMIT = 10;
+const WA_RATE_WINDOW_MS = 60 * 60 * 1000;
+
 router.post('/whatsapp-send', (req, res) => {
   const { to, message } = req.body;
   if (!to?.trim() || !message?.trim()) {
@@ -467,9 +472,17 @@ router.post('/whatsapp-send', (req, res) => {
   }
   const normalized = normalizePhone(to);
 
+  // Rate limit check
+  const now = Date.now();
+  while (waSendLog.length && waSendLog[0] < now - WA_RATE_WINDOW_MS) waSendLog.shift();
+  if (waSendLog.length >= WA_RATE_LIMIT) {
+    console.warn('[sofia/whatsapp-send] rate limit alcanzado');
+    return res.status(429).json({ error: `Límite de ${WA_RATE_LIMIT} WhatsApps por hora alcanzado. Intentá más tarde.` });
+  }
+
   // Solo se puede enviar a números registrados en recursos del equipo
   const wdb = getDb();
-  const knownNumbers = wdb.prepare('SELECT telefono FROM resources WHERE activo=1 AND telefono IS NOT NULL').all().map(r => r.telefono);
+  const knownNumbers = wdb.prepare('SELECT telefono FROM resources WHERE activo=1 AND telefono IS NOT NULL').all().map(r => normalizePhone(r.telefono));
   if (!knownNumbers.includes(normalized)) {
     console.warn('[sofia/whatsapp-send] intento de envío a número no registrado:', normalized);
     return res.status(403).json({ error: 'Número no registrado en Recursos. Solo se puede enviar WhatsApp a miembros del equipo.' });
@@ -481,9 +494,23 @@ router.post('/whatsapp-send', (req, res) => {
 
   execFile('ssh', sshArgs(remoteCmd), { timeout: 30000 }, (err, stdout, stderr) => {
     if (err) {
-      console.error('[sofia/whatsapp-send] ssh error:', err.message, stderr);
+      // OpenClaw escribe errores en stdout — combinar todo para el análisis
+      const combinedErr = (err.message + (stdout || '') + (stderr || '')).toLowerCase();
+      const combinedRaw = err.message + (stdout || '') + (stderr || '');
+      console.error('[sofia/whatsapp-send] ssh error:', err.message, stdout?.slice(0, 300));
+
+      if (combinedErr.includes('timelock') || combinedErr.includes('temporarily blocked')) {
+        const untilMatch = combinedRaw.match(/until=([^)\s,\]]+)/);
+        const untilStr = untilMatch ? ` Intentá después del ${new Date(untilMatch[1]).toLocaleString('es-AR')}.` : '';
+        return res.status(503).json({ error: `WhatsApp bloqueó temporalmente los mensajes automáticos.${untilStr}` });
+      }
+      if (combinedErr.includes('no active whatsapp')) {
+        return res.status(503).json({ error: 'El gateway de WhatsApp no está activo. Contactá al administrador.' });
+      }
       return res.status(500).json({ error: 'Error al enviar WhatsApp' });
     }
+
+    waSendLog.push(now);
     try {
       const json = JSON.parse(stdout.trim());
       res.json({ ok: true, to: normalized, result: json });
