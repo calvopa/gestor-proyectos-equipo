@@ -94,21 +94,26 @@ router.get('/:id/board', (req, res) => {
     ORDER BY sp.orden, p.nombre
   `).all(sprintId);
 
+  const { clickup_status } = req.query;
+  const backlogParams = [sprintId];
+  let backlogWhere = `WHERE p.estado != 'cerrado' AND p.id NOT IN (SELECT project_id FROM sprint_projects WHERE sprint_id = ?)`;
+  if (clickup_status) {
+    backlogWhere += ` AND p.clickup_status = ?`;
+    backlogParams.push(clickup_status);
+  }
+
   const backlog = db.prepare(`
     SELECT p.*,
       GROUP_CONCAT(DISTINCT r.nombre) AS tecnicos
     FROM projects p
     LEFT JOIN assignments a ON a.project_id = p.id
     LEFT JOIN resources r ON r.id = a.resource_id
-    WHERE p.estado != 'cerrado'
-      AND p.id NOT IN (
-        SELECT project_id FROM sprint_projects WHERE sprint_id = ?
-      )
+    ${backlogWhere}
     GROUP BY p.id
     ORDER BY
       CASE p.prioridad WHEN 'critica' THEN 0 WHEN 'alta' THEN 1 WHEN 'media' THEN 2 ELSE 3 END,
       p.nombre
-  `).all(sprintId);
+  `).all(...backlogParams);
 
   res.json({
     sprint,

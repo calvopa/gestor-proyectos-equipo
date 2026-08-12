@@ -2571,7 +2571,7 @@ async function renderSprints() {
   const main = document.getElementById('main-content');
   main.innerHTML = '<div class="spinner"></div>';
 
-  const sprints = await api.getSprints();
+  const [sprints, phases] = await Promise.all([api.getSprints(), api.getPhases()]);
 
   let sid = parseInt(localStorage.getItem('gestor_sprint_id') || '0');
   if (!sprints.find(s => s.id === sid)) {
@@ -2580,6 +2580,8 @@ async function renderSprints() {
     if (sid) localStorage.setItem('gestor_sprint_id', sid);
   }
 
+  let cuStatus = localStorage.getItem('gestor_sprint_cu_status') || '';
+
   const selectOpts = sprints.length === 0
     ? '<option value="">-- Sin sprints --</option>'
     : sprints.map(s => {
@@ -2587,12 +2589,22 @@ async function renderSprints() {
         return `<option value="${s.id}" ${s.id === sid ? 'selected' : ''}>${label}</option>`;
       }).join('');
 
+  const phaseOpts = phases.length
+    ? `<option value="">Todos los estados</option>` +
+      phases.map(p => `<option value="${escHtml(p)}" ${cuStatus === p ? 'selected' : ''}>${escHtml(p)}</option>`).join('')
+    : `<option value="">Sin datos ClickUp</option>`;
+
   main.innerHTML = `
     <div class="sprint-page">
       <div class="sprint-topbar">
-        <div class="sprint-selector-wrap">
-          <select id="sprint-select" class="sprint-select">${selectOpts}</select>
-        </div>
+        <select id="sprint-select" class="sprint-select">${selectOpts}</select>
+        ${phases.length ? `
+        <div class="sprint-cufilter-wrap">
+          <span class="sprint-cufilter-label">Backlog:</span>
+          <select id="sprint-cu-filter" class="sprint-select sprint-select-sm" title="Filtrar backlog por estado ClickUp">
+            ${phaseOpts}
+          </select>
+        </div>` : ''}
         <button id="btn-nuevo-sprint" class="btn btn-primary btn-sm">+ Nuevo Sprint</button>
       </div>
       <div id="sprint-info-bar"></div>
@@ -2755,7 +2767,8 @@ async function renderSprints() {
         </div>`;
       return;
     }
-    const board = await api.getSprintBoard(sprintId);
+    const q = cuStatus ? { clickup_status: cuStatus } : {};
+    const board = await api.getSprintBoard(sprintId, q);
     renderSprintInfoBar(board.sprint);
     renderBoard(board);
   }
@@ -2820,6 +2833,12 @@ async function renderSprints() {
     localStorage.setItem('gestor_sprint_id', newId);
     sid = newId;
     loadBoard(newId);
+  });
+
+  document.getElementById('sprint-cu-filter')?.addEventListener('change', e => {
+    cuStatus = e.target.value;
+    localStorage.setItem('gestor_sprint_cu_status', cuStatus);
+    loadBoard(sid);
   });
 
   document.getElementById('btn-nuevo-sprint')?.addEventListener('click', () => {

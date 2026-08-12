@@ -3260,6 +3260,29 @@ tbody tr { transition: background .1s; }
 }
 .sprint-select:focus { outline: none; border-color: var(--accent); }
 
+.sprint-select-sm {
+  min-width: 180px;
+  max-width: 260px;
+  flex: 0 1 auto;
+}
+
+.sprint-cufilter-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.sprint-cufilter-label {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text2);
+  white-space: nowrap;
+}
+
 /* ── Info bar del sprint activo ── */
 .sprint-info-bar {
   display: flex;
@@ -3396,6 +3419,10 @@ tbody tr { transition: background .1s; }
 }
 
 .sprint-col-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg2);
   display: flex;
   align-items: center;
   justify-content: space-between;
