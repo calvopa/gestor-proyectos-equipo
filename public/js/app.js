@@ -2593,23 +2593,24 @@ async function renderSprints() {
       completado:  { label: 'Completado',  color: '#3aaa68' },
     };
     const m = estadoMeta[sprint.estado] || estadoMeta.planificado;
-    document.getElementById('sprint-info-bar').innerHTML = `
-      <div class="sprint-info-bar">
-        <div class="sprint-info-left">
-          <span class="sprint-estado-badge" style="background:${m.color}20;color:${m.color};border:1px solid ${m.color}50">${m.label}</span>
-          ${sprint.objetivo ? `<span class="sprint-objetivo">${escHtml(sprint.objetivo)}</span>` : ''}
-          <span class="sprint-fechas">📅 ${sprint.fecha_inicio} → ${sprint.fecha_fin}</span>
-        </div>
-        <div class="sprint-progress-wrap">
-          <span class="sprint-progress-label">${done}/${total} completados</span>
-          <div class="sprint-progress-bar"><div class="sprint-progress-fill" style="width:${pct}%"></div></div>
-        </div>
-        <div class="sprint-info-actions">
-          ${sprint.estado === 'planificado' ? `<button class="btn btn-sm btn-primary" data-sprint-action="activar">▶ Activar</button>` : ''}
-          ${sprint.estado === 'activo' ? `<button class="btn btn-sm" style="background:#3aaa68;color:#fff" data-sprint-action="completar">✓ Completar</button>` : ''}
-          <button class="btn btn-sm btn-ghost" data-sprint-action="editar">✏ Editar</button>
-          <button class="btn btn-sm btn-ghost" style="color:var(--red)" data-sprint-action="eliminar">🗑</button>
-        </div>
+    const infoEl = document.getElementById('sprint-info-bar');
+    infoEl.className = 'sprint-info-bar';
+    infoEl.innerHTML = `
+      <div class="sprint-info-left">
+        <span class="sprint-estado-badge" style="background:${m.color}20;color:${m.color};border:1px solid ${m.color}50">${m.label}</span>
+        ${sprint.objetivo ? `<span class="sprint-objetivo">${escHtml(sprint.objetivo)}</span>` : ''}
+        <span class="sprint-fechas">${sprint.fecha_inicio} → ${sprint.fecha_fin}</span>
+      </div>
+      <div class="sprint-progress-wrap">
+        <span class="sprint-progress-label">${done}/${total}</span>
+        <div class="sprint-progress-bar"><div class="sprint-progress-fill" style="width:${pct}%"></div></div>
+        <span class="sprint-progress-label">${pct}%</span>
+      </div>
+      <div class="sprint-info-actions">
+        ${sprint.estado === 'planificado' ? `<button class="btn btn-sm btn-primary" data-sprint-action="activar">▶ Activar</button>` : ''}
+        ${sprint.estado === 'activo' ? `<button class="btn btn-sm" style="background:#3aaa68;color:#fff" data-sprint-action="completar">✓ Completar</button>` : ''}
+        <button class="btn btn-sm btn-ghost" data-sprint-action="editar">✏ Editar</button>
+        <button class="btn btn-sm btn-ghost" style="color:var(--red)" data-sprint-action="eliminar">🗑</button>
       </div>
     `;
     document.querySelectorAll('[data-sprint-action]').forEach(btn => {
@@ -2644,12 +2645,12 @@ async function renderSprints() {
       const emptyHint = items.length === 0
         ? `<div class="sprint-drop-hint">Arrastrá proyectos aquí</div>` : '';
       return `
-        <div class="sprint-col kanban-col" data-col="${col}">
+        <div class="sprint-col" data-col="${col}">
           <div class="sprint-col-header sprint-col-${col}">
             <span>${label}</span>
-            <span class="kanban-col-count">${items.length}</span>
+            <span style="font-size:11px;opacity:.6">${items.length}</span>
           </div>
-          <div class="sprint-cards kanban-cards" data-col="${col}">
+          <div class="sprint-cards" data-col="${col}">
             ${emptyHint}${items.map(p => sprintCardHtml(p, col)).join('')}
           </div>
         </div>`;
