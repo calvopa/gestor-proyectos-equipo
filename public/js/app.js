@@ -73,6 +73,29 @@ function escHtml(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ── Modal globals: Escape + body scroll lock ───────────────
+// Observa aparición/desaparición de .modal-overlay en el DOM.
+// Funciona para todos los modales sin modificar cada uno.
+(function initModalGlobals() {
+  const lockScroll   = () => { document.body.style.overflow = 'hidden'; };
+  const unlockScroll = () => { if (!document.querySelector('.modal-overlay')) document.body.style.overflow = ''; };
+
+  const observer = new MutationObserver(mutations => {
+    for (const m of mutations) {
+      for (const node of m.addedNodes)   { if (node.classList?.contains('modal-overlay')) lockScroll(); }
+      for (const node of m.removedNodes) { if (node.classList?.contains('modal-overlay')) unlockScroll(); }
+    }
+  });
+  observer.observe(document.body, { childList: true });
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    // Cierra el overlay más reciente
+    const overlays = document.querySelectorAll('.modal-overlay');
+    if (overlays.length) overlays[overlays.length - 1].remove();
+  });
+})();
+
 // ── Salud & Actividad ──────────────────────────────────────
 function diasSinActividad(p) {
   const ref = p.last_comment_at || p.updated_at || p.created_at;
@@ -2726,46 +2749,38 @@ async function renderSprints() {
     const isEdit = !!sprint;
     const today    = new Date().toISOString().slice(0, 10);
     const twoWeeks = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
-    const modal = el(`
-      <div class="modal-backdrop">
-        <div class="modal" style="max-width:480px">
-          <div class="modal-header">
-            <h3>${isEdit ? 'Editar Sprint' : 'Nuevo Sprint'}</h3>
-            <button class="modal-close-x btn btn-ghost btn-sm">✕</button>
+    const overlay = el(`
+      <div class="modal-overlay">
+        <div class="modal">
+          <h2>${isEdit ? 'Editar Sprint' : 'Nuevo Sprint'}</h2>
+          <div class="form-group">
+            <label>Nombre *</label>
+            <input id="sm-nombre" type="text" value="${escHtml(sprint?.nombre || '')}" placeholder="Sprint 12">
           </div>
-          <div class="modal-body" style="display:flex;flex-direction:column;gap:14px">
-            <label class="form-label">Nombre *
-              <input id="sm-nombre" class="form-input" type="text" value="${escHtml(sprint?.nombre || '')}" placeholder="Sprint 12" required>
-            </label>
-            <label class="form-label">Objetivo
-              <input id="sm-objetivo" class="form-input" type="text" value="${escHtml(sprint?.objetivo || '')}" placeholder="Meta del sprint">
-            </label>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-              <label class="form-label">Inicio *
-                <input id="sm-inicio" class="form-input" type="date" value="${sprint?.fecha_inicio || today}">
-              </label>
-              <label class="form-label">Fin *
-                <input id="sm-fin" class="form-input" type="date" value="${sprint?.fecha_fin || twoWeeks}">
-              </label>
-            </div>
+          <div class="form-group">
+            <label>Objetivo</label>
+            <input id="sm-objetivo" type="text" value="${escHtml(sprint?.objetivo || '')}" placeholder="Meta del sprint">
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label>Inicio *</label><input id="sm-inicio" type="date" value="${sprint?.fecha_inicio || today}"></div>
+            <div class="form-group"><label>Fin *</label><input id="sm-fin" type="date" value="${sprint?.fecha_fin || twoWeeks}"></div>
           </div>
           <div class="modal-footer">
-            <button class="btn btn-ghost modal-cancel-btn">Cancelar</button>
+            <button class="btn btn-secondary" id="sm-cancel">Cancelar</button>
             <button id="sm-save" class="btn btn-primary">${isEdit ? 'Guardar cambios' : 'Crear Sprint'}</button>
           </div>
         </div>
       </div>`);
-    document.body.appendChild(modal);
-    const close = () => modal.remove();
-    modal.querySelector('.modal-close-x').addEventListener('click', close);
-    modal.querySelector('.modal-cancel-btn').addEventListener('click', close);
-    modal.addEventListener('click', e => { if (e.target === modal) close(); });
-    modal.querySelector('#sm-nombre').focus();
-    modal.querySelector('#sm-save').addEventListener('click', async () => {
-      const nombre      = modal.querySelector('#sm-nombre').value.trim();
-      const objetivo    = modal.querySelector('#sm-objetivo').value.trim();
-      const fecha_inicio = modal.querySelector('#sm-inicio').value;
-      const fecha_fin   = modal.querySelector('#sm-fin').value;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('#sm-cancel').addEventListener('click', close);
+    overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+    overlay.querySelector('#sm-nombre').focus();
+    overlay.querySelector('#sm-save').addEventListener('click', async () => {
+      const nombre      = overlay.querySelector('#sm-nombre').value.trim();
+      const objetivo    = overlay.querySelector('#sm-objetivo').value.trim();
+      const fecha_inicio = overlay.querySelector('#sm-inicio').value;
+      const fecha_fin   = overlay.querySelector('#sm-fin').value;
       if (!nombre || !fecha_inicio || !fecha_fin) { toast('Completá nombre, inicio y fin', 'warn'); return; }
       if (fecha_fin < fecha_inicio)               { toast('La fecha fin debe ser posterior al inicio', 'warn'); return; }
       try {
