@@ -337,6 +337,10 @@ function semanaCardHtml(p, aiEnabled, weekStart) {
         : `<button class="btn btn-ghost btn-sm sem-ai-btn" data-pid="${p.id}">✨ Resumir con IA</button>`}
     </div>` : '';
 
+  const sprintCallout = p.sprint_comment
+    ? `<div class="sprint-callout"><span class="sprint-callout-icon">💬</span><span class="sprint-callout-text">${escHtml(p.sprint_comment)}</span></div>`
+    : '';
+
   return `
     <div class="sem-card" data-salud="${p.salud}">
       <div class="sem-card-header">
@@ -355,6 +359,7 @@ function semanaCardHtml(p, aiEnabled, weekStart) {
         <div class="sem-events-header">Esta semana · ${p.event_count} ${p.event_count === 1 ? 'update' : 'updates'}</div>
         <div class="sem-events">${eventLines}</div>
       </div>
+      ${sprintCallout}
       <div class="sem-card-footer">
         <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
           ${movTxt}
@@ -556,6 +561,10 @@ function semanaPresentCardHtml(p, weekStart) {
          <button class="sem-pres-ai-btn" data-pid="${p.id}">✨ Resumir con IA</button>
        </div>`;
 
+  const presSprintCallout = p.sprint_comment
+    ? `<div class="sprint-callout sprint-callout-pres"><span class="sprint-callout-icon">💬</span><span class="sprint-callout-text">${escHtml(p.sprint_comment)}</span></div>`
+    : '';
+
   let diasInfo = '';
   if (p.dias_inactivo_prev !== null && p.dias_inactivo !== null) {
     diasInfo = `Días sin actividad: ${p.dias_inactivo_prev}d → ${p.dias_inactivo}d`;
@@ -574,6 +583,7 @@ function semanaPresentCardHtml(p, weekStart) {
         <span class="sem-pres-tec">${escHtml(tecList)}</span>
       </div>
       ${faseChangeTxt}
+      ${presSprintCallout}
       <div class="sem-pres-events-wrap">
         <div class="sem-pres-events-title">Esta semana · ${p.event_count} ${p.event_count === 1 ? 'update' : 'updates'}</div>
         <div class="sem-pres-events">${eventLines}</div>

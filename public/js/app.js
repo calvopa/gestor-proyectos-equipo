@@ -73,6 +73,17 @@ function escHtml(str) {
   return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+function relativeTime(dt) {
+  if (!dt) return '';
+  const ms = Date.now() - new Date(dt.replace(' ', 'T') + (dt.includes('T') ? '' : 'Z')).getTime();
+  const m = Math.floor(ms / 60000);
+  if (m < 2)   return 'ahora';
+  if (m < 60)  return `hace ${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24)  return `hace ${h}h`;
+  return `hace ${Math.floor(h / 24)}d`;
+}
+
 // ── Modal globals: Escape + body scroll lock ───────────────
 // Observa aparición/desaparición de .modal-overlay en el DOM.
 // Funciona para todos los modales sin modificar cada uno.
@@ -2289,7 +2300,10 @@ async function renderDashboard() {
           <tbody>
             ${d.enRiesgo.map(p => `
               <tr>
-                <td><a href="#" class="dash-proj-link" data-id="${p.id}" style="font-weight:600;color:var(--accent)">${escHtml(p.nombre)}</a></td>
+                <td>
+                  <a href="#" class="dash-proj-link" data-id="${p.id}" style="font-weight:600;color:var(--accent)">${escHtml(p.nombre)}</a>
+                  ${p.sprint_comment ? `<div class="sprint-callout sprint-callout-sm"><span class="sprint-callout-icon">💬</span><span class="sprint-callout-text">${escHtml(p.sprint_comment)}</span></div>` : ''}
+                </td>
                 <td style="font-size:12px;color:var(--text2)">${escHtml(p.clickup_status||'—')}</td>
                 <td>${badgePrio(p.prioridad)}</td>
                 <td style="text-align:center">
@@ -2330,7 +2344,10 @@ async function renderDashboard() {
                 : `<span class="dias-badge">${dv}d</span>`;
               return `
               <tr>
-                <td><a href="#" class="dash-proj-link" data-id="${p.id}" style="font-weight:600;color:var(--accent)">${escHtml(p.nombre)}</a></td>
+                <td>
+                  <a href="#" class="dash-proj-link" data-id="${p.id}" style="font-weight:600;color:var(--accent)">${escHtml(p.nombre)}</a>
+                  ${p.sprint_comment ? `<div class="sprint-callout sprint-callout-sm"><span class="sprint-callout-icon">💬</span><span class="sprint-callout-text">${escHtml(p.sprint_comment)}</span></div>` : ''}
+                </td>
                 <td style="font-size:12px;color:var(--text2)">${escHtml(p.clickup_status||'—')}</td>
                 <td style="font-size:12px">${p.fecha_fin_est}</td>
                 <td style="text-align:center">${dvTxt}</td>
@@ -2612,7 +2629,7 @@ async function renderSprints() {
     </div>
   `;
 
-  function sprintCardHtml(p, col) {
+  function sprintCardHtml(p, col, sprintId) {
     const salud = calcSalud(p);
     const saludHtml = salud.level !== 'grey'
       ? `<span class="kanban-salud kanban-salud-${salud.level}">${escHtml(salud.titulo)}</span>` : '';
@@ -2622,6 +2639,21 @@ async function renderSprints() {
     const proxVence = p.fecha_fin_est && !vencido && Math.floor((new Date(p.fecha_fin_est) - hoy) / 86400000) <= 5;
     const fechaHtml = p.fecha_fin_est
       ? `<span class="${vencido ? 'kanban-fecha-red' : proxVence ? 'kanban-fecha-yellow' : 'kanban-fecha'}">${p.fecha_fin_est}</span>` : '';
+
+    const hasComment = col !== 'backlog' && !!p.sprint_comment;
+    const commentPreview = hasComment
+      ? `<div class="sc-preview">${escHtml(p.sprint_comment.slice(0, 80))}${p.sprint_comment.length > 80 ? '…' : ''}</div>` : '';
+    const commentMeta = hasComment
+      ? `<span class="sc-meta">${relativeTime(p.sprint_comment_at)}</span>` : '';
+    const commentFooter = col !== 'backlog' ? `
+      <div class="sc-footer" data-pid="${p.id}" data-sid="${sprintId || ''}">
+        ${commentPreview}
+        <div class="sc-footer-bar">
+          ${commentMeta}
+          <button class="sc-btn" title="${hasComment ? 'Editar nota del sprint' : 'Agregar nota del sprint'}">💬${hasComment ? '' : '<span class="sc-btn-add">+</span>'}</button>
+        </div>
+      </div>` : '';
+
     return `
       <div class="kanban-card sprint-card" draggable="true"
            data-id="${p.id}" data-col="${col}" data-estado="${escHtml(p.estado)}">
@@ -2630,6 +2662,7 @@ async function renderSprints() {
           ${badgeEstado(p.estado)}${badgePrio(p.prioridad)}${saludHtml}${fechaHtml}
         </div>
         ${tecs.length ? `<div class="kanban-card-tecs">${tecs.map(t => `<span class="kanban-tec">${escHtml(t)}</span>`).join('')}</div>` : ''}
+        ${commentFooter}
       </div>`;
   }
 
@@ -2701,7 +2734,7 @@ async function renderSprints() {
             <span style="font-size:11px;opacity:.6">${items.length}</span>
           </div>
           <div class="sprint-cards" data-col="${col}">
-            ${emptyHint}${items.map(p => sprintCardHtml(p, col)).join('')}
+            ${emptyHint}${items.map(p => sprintCardHtml(p, col, sprintId)).join('')}
           </div>
         </div>`;
     };
@@ -2752,6 +2785,71 @@ async function renderSprints() {
           await loadBoard(sprintId);
         } catch (err) {
           toast(err.message, 'error');
+        }
+      });
+    });
+
+    // Sprint comment inline editor
+    wrap.addEventListener('click', e => {
+      const btn = e.target.closest('.sc-btn');
+      if (!btn) return;
+      e.stopPropagation();
+      const footer = btn.closest('.sc-footer');
+      if (!footer || footer.dataset.editing) return;
+      footer.dataset.editing = '1';
+
+      const pid = footer.dataset.pid;
+      const sid = footer.dataset.sid;
+      const preview = footer.querySelector('.sc-preview');
+      const currentText = preview?.textContent.replace(/…$/, '') || '';
+
+      footer.innerHTML = `
+        <textarea class="sc-textarea" placeholder="Nota interna del sprint… (Ctrl+Enter para guardar)">${escHtml(currentText)}</textarea>
+        <div class="sc-editor-bar">
+          <span class="sc-hint">Ctrl+Enter guardar · Esc cancelar</span>
+          <button class="sc-save-btn">✓ Guardar</button>
+          ${currentText ? '<button class="sc-del-btn">🗑</button>' : ''}
+        </div>`;
+
+      const ta = footer.querySelector('.sc-textarea');
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = ta.value.length;
+
+      async function saveComment() {
+        const val = ta.value.trim();
+        try {
+          if (val) {
+            await api.putSprintComment(sid, pid, { comment: val });
+          } else {
+            await api.deleteSprintComment(sid, pid);
+          }
+          await loadBoard(sprintId);
+          // brief checkmark on the saved card
+          const card = wrap.querySelector(`.sprint-card[data-id="${pid}"]`);
+          if (card) {
+            const ok = document.createElement('div');
+            ok.className = 'sc-saved-flash';
+            ok.textContent = '✓ Guardado';
+            card.appendChild(ok);
+            setTimeout(() => ok.remove(), 1800);
+          }
+        } catch (err) { toast(err.message, 'error'); }
+      }
+
+      ta.addEventListener('keydown', async e2 => {
+        if (e2.key === 'Enter' && e2.ctrlKey) { e2.preventDefault(); await saveComment(); }
+        if (e2.key === 'Escape') { e2.preventDefault(); loadBoard(sprintId); }
+      });
+
+      footer.querySelector('.sc-save-btn').addEventListener('click', saveComment);
+      footer.querySelector('.sc-del-btn')?.addEventListener('click', async () => {
+        await api.deleteSprintComment(sid, pid);
+        loadBoard(sprintId);
+      });
+
+      ta.addEventListener('blur', e2 => {
+        if (!footer.contains(e2.relatedTarget)) {
+          setTimeout(() => { if (footer.dataset.editing) saveComment(); }, 150);
         }
       });
     });

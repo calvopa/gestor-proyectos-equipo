@@ -84,11 +84,13 @@ router.get('/:id/board', (req, res) => {
 
   const sprintProjects = db.prepare(`
     SELECT p.*, sp.estado AS sprint_estado, sp.orden,
-      GROUP_CONCAT(DISTINCT r.nombre) AS tecnicos
+      GROUP_CONCAT(DISTINCT r.nombre) AS tecnicos,
+      spc.comment AS sprint_comment, spc.updated_at AS sprint_comment_at
     FROM sprint_projects sp
     JOIN projects p ON p.id = sp.project_id
     LEFT JOIN assignments a ON a.project_id = p.id
     LEFT JOIN resources r ON r.id = a.resource_id
+    LEFT JOIN sprint_project_comments spc ON spc.sprint_id = sp.sprint_id AND spc.project_id = p.id
     WHERE sp.sprint_id = ?
     GROUP BY p.id
     ORDER BY sp.orden, p.nombre
@@ -158,6 +160,38 @@ router.patch('/:id/projects/:projectId', (req, res) => {
 router.delete('/:id/projects/:projectId', (req, res) => {
   const db = getDb();
   db.prepare('DELETE FROM sprint_projects WHERE sprint_id = ? AND project_id = ?')
+    .run(req.params.id, req.params.projectId);
+  res.json({ ok: true });
+});
+
+// GET /api/sprints/:id/projects/:projectId/comment
+router.get('/:id/projects/:projectId/comment', (req, res) => {
+  const db = getDb();
+  const row = db.prepare(
+    'SELECT comment, author, updated_at FROM sprint_project_comments WHERE sprint_id=? AND project_id=?'
+  ).get(req.params.id, req.params.projectId);
+  res.json(row || { comment: null, author: null, updated_at: null });
+});
+
+// PUT /api/sprints/:id/projects/:projectId/comment
+router.put('/:id/projects/:projectId/comment', (req, res) => {
+  const db = getDb();
+  const { comment, author } = req.body;
+  db.prepare(`
+    INSERT INTO sprint_project_comments (sprint_id, project_id, comment, author, updated_at)
+    VALUES (?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(sprint_id, project_id) DO UPDATE SET
+      comment    = excluded.comment,
+      author     = excluded.author,
+      updated_at = excluded.updated_at
+  `).run(req.params.id, req.params.projectId, comment?.trim() || null, author?.trim() || null);
+  res.json({ ok: true });
+});
+
+// DELETE /api/sprints/:id/projects/:projectId/comment
+router.delete('/:id/projects/:projectId/comment', (req, res) => {
+  const db = getDb();
+  db.prepare('DELETE FROM sprint_project_comments WHERE sprint_id=? AND project_id=?')
     .run(req.params.id, req.params.projectId);
   res.json({ ok: true });
 });

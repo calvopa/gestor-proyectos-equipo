@@ -60,10 +60,14 @@ router.get('/', async (req, res) => {
     const projects = db.prepare(`
       SELECT p.*,
         GROUP_CONCAT(DISTINCT r.nombre) as tecnicos,
-        (SELECT MAX(te.inicio) FROM time_entries te WHERE te.project_id=p.id) as ultima_hora
+        (SELECT MAX(te.inicio) FROM time_entries te WHERE te.project_id=p.id) as ultima_hora,
+        spc.comment AS sprint_comment,
+        spc.updated_at AS sprint_comment_at
       FROM projects p
       LEFT JOIN assignments a ON a.project_id=p.id
       LEFT JOIN resources r ON r.id=a.resource_id
+      LEFT JOIN sprint_project_comments spc ON spc.project_id=p.id
+        AND spc.sprint_id=(SELECT id FROM sprints WHERE estado='activo' ORDER BY id DESC LIMIT 1)
       GROUP BY p.id
     `).all();
 
@@ -168,6 +172,8 @@ router.get('/', async (req, res) => {
         fase_changed:         phaseChanged,
         fase_prev:            prevSnap?.fase ?? null,
         ai_summary:           snapRow?.ai_summary ?? null,
+        sprint_comment:       p.sprint_comment || null,
+        sprint_comment_at:    p.sprint_comment_at || null,
         seg_estimado_semana:  horasEst.seg_estimado_semana,
       };
     });
@@ -226,11 +232,18 @@ router.post('/ai-summary', async (req, res) => {
       .map(e => `- ${e.actor} (${e.event_at.slice(0, 10)}): ${e.detail}`)
       .join('\n');
 
+    const snap = db.prepare(
+      'SELECT sprint_comment FROM projects p LEFT JOIN sprint_project_comments spc ON spc.project_id=p.id AND spc.sprint_id=(SELECT id FROM sprints WHERE estado=\'activo\' ORDER BY id DESC LIMIT 1) WHERE p.id=?'
+    ).get(project_id);
+    const sprintCommentLine = snap?.sprint_comment
+      ? `\nNota interna del sprint (contexto adicional para el resumen):\n"${snap.sprint_comment}"\n`
+      : '';
+
     const prompt = `Sos asistente de un equipo técnico. Con los comentarios de la semana del proyecto "${project.nombre}", generá un resumen de exactamente 2 líneas con este formato:
 ▸ Avanzó: [qué se hizo]
 ▸ Pendiente: [qué quedó sin resolver]
 Sé conciso y técnico. No uses otros emojis.
-
+${sprintCommentLine}
 Comentarios:
 ${lines}`;
 

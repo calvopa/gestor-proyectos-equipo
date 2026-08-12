@@ -89,6 +89,9 @@ const api = {
   addProjectToSprint: (sid, pid, body = {}) => api._fetch(`/api/sprints/${sid}/projects/${pid}`, { method: 'POST', body }),
   updateSprintProject: (sid, pid, body) => api._fetch(`/api/sprints/${sid}/projects/${pid}`, { method: 'PATCH', body }),
   removeProjectFromSprint: (sid, pid) => api._fetch(`/api/sprints/${sid}/projects/${pid}`, { method: 'DELETE' }),
+  getSprintComment: (sid, pid) => api._fetch(`/api/sprints/${sid}/projects/${pid}/comment`),
+  putSprintComment: (sid, pid, body) => api._fetch(`/api/sprints/${sid}/projects/${pid}/comment`, { method: 'PUT', body }),
+  deleteSprintComment: (sid, pid) => api._fetch(`/api/sprints/${sid}/projects/${pid}/comment`, { method: 'DELETE' }),
 
   // Sofia — Conversaciones (bandeja persistida)
   sofiaConversations: (p = {}) => api._fetch('/api/sofia/conversations?' + new URLSearchParams(p)),

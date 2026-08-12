@@ -46,10 +46,14 @@ router.get('/', (req, res) => {
   const projects = db.prepare(`
     SELECT p.*,
       GROUP_CONCAT(DISTINCT r.nombre) as tecnicos,
-      (SELECT MAX(te.inicio) FROM time_entries te WHERE te.project_id=p.id AND te.fin IS NOT NULL) as ultima_hora
+      (SELECT MAX(te.inicio) FROM time_entries te WHERE te.project_id=p.id AND te.fin IS NOT NULL) as ultima_hora,
+      spc.comment AS sprint_comment,
+      spc.updated_at AS sprint_comment_at
     FROM projects p
     LEFT JOIN assignments a ON a.project_id=p.id
     LEFT JOIN resources r ON r.id=a.resource_id
+    LEFT JOIN sprint_project_comments spc ON spc.project_id=p.id
+      AND spc.sprint_id=(SELECT id FROM sprints WHERE estado='activo' ORDER BY id DESC LIMIT 1)
     GROUP BY p.id
   `).all();
 
@@ -103,10 +107,12 @@ router.get('/', (req, res) => {
         prioridad:        p.prioridad,
         dias_inactivo:    dias,
         dias_vencido:     dv !== null && dv < 0 ? Math.abs(dv) : null,
-        last_comment_text: p.last_comment_text ? p.last_comment_text.slice(0, 120) : null,
-        last_comment_by:  p.last_comment_by,
-        last_comment_at:  p.last_comment_at,
-        tecnicos:         p.tecnicos,
+        last_comment_text:  p.last_comment_text ? p.last_comment_text.slice(0, 120) : null,
+        last_comment_by:   p.last_comment_by,
+        last_comment_at:   p.last_comment_at,
+        sprint_comment:    p.sprint_comment || null,
+        sprint_comment_at: p.sprint_comment_at || null,
+        tecnicos:          p.tecnicos,
       };
     })
     .sort((a, b) => {
@@ -123,12 +129,14 @@ router.get('/', (req, res) => {
     .filter(p => p.dv !== null && p.dv >= -7 && p.dv <= 30)
     .sort((a, b) => a.dv - b.dv)
     .map(p => ({
-      id:             p.id,
-      nombre:         p.nombre,
-      clickup_status: p.clickup_status,
-      fecha_fin_est:  p.fecha_fin_est,
-      dias_hasta:     p.dv,
-      tecnicos:       p.tecnicos,
+      id:                p.id,
+      nombre:            p.nombre,
+      clickup_status:    p.clickup_status,
+      fecha_fin_est:     p.fecha_fin_est,
+      dias_hasta:        p.dv,
+      tecnicos:          p.tecnicos,
+      sprint_comment:    p.sprint_comment || null,
+      sprint_comment_at: p.sprint_comment_at || null,
     }));
 
   // Horas (solo si hay registros)
