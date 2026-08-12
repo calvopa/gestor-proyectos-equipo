@@ -316,6 +316,147 @@
   box-shadow: 0 2px 8px rgba(208,120,40,.5);
 }
 
+/* ── Tema Pro (Navy Dark) ── */
+[data-theme="pro"] {
+  color-scheme: dark;
+  --bg:     #0f1623;
+  --bg2:    #141d2e;
+  --bg3:    #1a2538;
+  --border: #1f2d42;
+  --text:   #e2e8f4;
+  --text2:  #8898b0;
+  --text3:  #5a6880;
+  --accent: #F5A033;
+  --accent2:#D07F18;
+  --green:  #2DC97A;
+  --yellow: #F0C040;
+  --red:    #F04868;
+  --orange: #F07840;
+  --blue:   #4898E8;
+  --radius: 4px;
+  --shadow: 0 4px 32px rgba(0,0,0,.6);
+  --pres-bg:      #0f1623;
+  --pres-border:  #1f2d42;
+  --pres-card-bg: #141d2e;
+  --pres-text:    #e2e8f4;
+  --pres-text2:   #8898b0;
+  --pres-ev-text: #aebcd4;
+  --pres-btn-bg:  #1a2538;
+  --pres-dot:     #1f2d42;
+}
+
+[data-theme="pro"] body {
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(ellipse 60% 40% at 15% 0%, rgba(72,152,232,.08) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 30% at 85% 100%, rgba(245,160,51,.06) 0%, transparent 60%);
+  background-size: auto;
+  background-attachment: fixed;
+}
+
+[data-theme="pro"] nav {
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+}
+
+[data-theme="pro"] nav .logo {
+  background: rgba(72,152,232,.05);
+  border-bottom: 1px solid var(--border);
+}
+
+[data-theme="pro"] nav ul li a {
+  color: var(--text2);
+}
+
+[data-theme="pro"] nav ul li a:hover {
+  background: rgba(245,160,51,.07);
+  color: #c0cce0;
+  border-left-color: transparent;
+  padding-left: 20px;
+}
+
+[data-theme="pro"] nav ul li a.active {
+  background: rgba(245,160,51,.12);
+  color: var(--accent);
+  border-left: 3px solid var(--accent);
+  padding-left: 17px;
+}
+
+[data-theme="pro"] .sync-status { color: var(--text3); }
+
+[data-theme="pro"] .card,
+[data-theme="pro"] .dash-card,
+[data-theme="pro"] .alert-card,
+[data-theme="pro"] .modal-box {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  box-shadow: 0 2px 16px rgba(0,0,0,.45);
+}
+
+[data-theme="pro"] table thead th {
+  background: var(--bg3);
+  color: var(--accent);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+  letter-spacing: .04em;
+}
+
+[data-theme="pro"] table tbody tr:nth-child(even) {
+  background: rgba(26,37,56,.6);
+}
+
+[data-theme="pro"] table tbody tr:hover {
+  background: rgba(245,160,51,.07);
+}
+
+[data-theme="pro"] input,
+[data-theme="pro"] select,
+[data-theme="pro"] textarea {
+  background: var(--bg3);
+  border: 1.5px solid var(--border);
+  color: var(--text);
+}
+
+[data-theme="pro"] input:focus,
+[data-theme="pro"] select:focus,
+[data-theme="pro"] textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(245,160,51,.15);
+}
+
+[data-theme="pro"] .btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0f1623;
+  font-weight: 700;
+}
+
+[data-theme="pro"] .btn-primary:hover {
+  background: var(--accent2);
+  border-color: var(--accent2);
+}
+
+[data-theme="pro"] .sprint-col-header {
+  background: var(--bg2);
+  border-bottom: 2px solid var(--border);
+}
+
+[data-theme="pro"] .theme-switcher { border-top: 1px solid var(--border); }
+
+[data-theme="pro"] .theme-btn {
+  border-color: var(--border);
+  color: var(--text3);
+  background: transparent;
+}
+
+[data-theme="pro"] .theme-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0f1623;
+  box-shadow: 0 2px 8px rgba(245,160,51,.4);
+}
+
 /* ── Theme Switcher ── */
 .theme-switcher {
   padding: 10px 14px 8px;
