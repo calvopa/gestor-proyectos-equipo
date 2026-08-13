@@ -233,7 +233,7 @@ router.post('/ai-summary', async (req, res) => {
       .join('\n');
 
     const snap = db.prepare(
-      'SELECT sprint_comment FROM projects p LEFT JOIN sprint_project_comments spc ON spc.project_id=p.id AND spc.sprint_id=(SELECT id FROM sprints WHERE estado=\'activo\' ORDER BY id DESC LIMIT 1) WHERE p.id=?'
+      'SELECT spc.comment AS sprint_comment FROM projects p LEFT JOIN sprint_project_comments spc ON spc.project_id=p.id AND spc.sprint_id=(SELECT id FROM sprints WHERE estado=\'activo\' ORDER BY id DESC LIMIT 1) WHERE p.id=?'
     ).get(project_id);
     const sprintCommentLine = snap?.sprint_comment
       ? `\nNota interna del sprint (contexto adicional para el resumen):\n"${snap.sprint_comment}"\n`
