@@ -1629,14 +1629,26 @@ async function renderGantt() {
       const barLeft   = Math.round((startDate - minDate) / 86400000) * DAY_W;
       const barW      = Math.max(DAY_W * 2, Math.round((endDate - startDate) / 86400000) * DAY_W + DAY_W);
       const tecs      = p.tecnicos ? p.tecnicos.split(',').map(t => t.trim()).filter(Boolean) : [];
-      const [,mm,dd]  = p.fecha_fin_est.split('-');
+
+      const daysLeft  = Math.round((endDate - today) / 86400000);
+      const dueLbl    = daysLeft < 0 ? `${Math.abs(daysLeft)}d tarde`
+                      : daysLeft === 0 ? 'Hoy' : `${daysLeft}d`;
+      const dueClass  = daysLeft < 0 ? 'gantt-due-late'
+                      : daysLeft === 0 ? 'gantt-due-today'
+                      : daysLeft <= 7  ? 'gantt-due-warn'
+                      : 'gantt-due-ok';
+      const lateClass = daysLeft < 0 && p.estado !== 'cerrado' ? ' gantt-row--late' : '';
+      const prioDot   = (p.prioridad === 'critica' || p.prioridad === 'alta')
+        ? `<span class="gantt-prio-dot gantt-prio-${p.prioridad}" title="Prioridad ${p.prioridad}"></span>`
+        : '';
 
       return `
-        <div class="gantt-row" data-id="${p.id}">
+        <div class="gantt-row${lateClass}" data-id="${p.id}" data-estado="${p.estado}">
           <div class="gantt-name-col">
             <span class="semaforo semaforo-${salud.level}" style="flex-shrink:0" title="${escHtml(salud.detalle)}"></span>
+            ${prioDot}
             <span class="gantt-name-text" title="${escHtml(p.nombre)}">${escHtml(p.nombre)}</span>
-            <span class="gantt-due-lbl">${dd}/${mm}</span>
+            <span class="gantt-due-chip ${dueClass}">${dueLbl}</span>
           </div>
           <div class="gantt-chart-col" style="width:${totalW}px">
             ${gridLines}${todayLine}
@@ -1666,11 +1678,38 @@ async function renderGantt() {
       </div>`;
   }
 
+  function buildStatsBar(filtered) {
+    const today_ = new Date(); today_.setHours(0, 0, 0, 0);
+    const atrasados = filtered.filter(p => {
+      const fin = new Date(p.fecha_fin_est); fin.setHours(0, 0, 0, 0);
+      return fin < today_ && p.estado !== 'cerrado';
+    }).length;
+    const porVencer = filtered.filter(p => {
+      const fin = new Date(p.fecha_fin_est); fin.setHours(0, 0, 0, 0);
+      const d = Math.round((fin - today_) / 86400000);
+      return d >= 0 && d <= 7 && p.estado !== 'cerrado';
+    }).length;
+    const enCurso  = filtered.filter(p => p.estado === 'en_curso').length;
+    const pausados = filtered.filter(p => p.estado === 'pausado').length;
+    const chips = [
+      atrasados > 0 && `<span class="gsb-chip gsb-late">⚠ ${atrasados} atrasado${atrasados > 1 ? 's' : ''}</span>`,
+      porVencer > 0 && `<span class="gsb-chip gsb-warn">⏰ ${porVencer} por vencer</span>`,
+      enCurso   > 0 && `<span class="gsb-chip gsb-active">▶ ${enCurso} en curso</span>`,
+      pausados  > 0 && `<span class="gsb-chip gsb-paused">⏸ ${pausados} pausado${pausados > 1 ? 's' : ''}</span>`,
+    ].filter(Boolean).join('');
+    const el2 = document.getElementById('gantt-stats-bar');
+    if (!el2) return;
+    el2.innerHTML = `
+      <div class="gsb-chips">${chips || '<span class="gsb-all-ok">✓ Sin proyectos atrasados</span>'}</div>
+      <span class="gsb-total">${filtered.length} proyecto${filtered.length !== 1 ? 's' : ''}</span>`;
+  }
+
   function redraw() {
     let f = projects;
     if (filterSearch) f = f.filter(p => p.nombre.toLowerCase().includes(filterSearch));
     if (filterEstado) f = f.filter(p => p.estado === filterEstado);
     document.getElementById('gantt-chart').innerHTML = buildChart(f);
+    buildStatsBar(f);
     wireRows();
     scrollToToday();
   }
@@ -1712,6 +1751,7 @@ async function renderGantt() {
         Solo proyectos con fecha de vencimiento · <span class="gantt-today-dot"></span> Hoy
       </span>
     </div>
+    <div id="gantt-stats-bar" class="gantt-stats-bar"></div>
     <div id="gantt-chart"></div>
   `;
 
