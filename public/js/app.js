@@ -2654,19 +2654,24 @@ async function renderSprints() {
         </div>
       </div>` : '';
 
+    const sprintEstadoTag = col === 'activos' && p.sprint_estado
+      ? `<span class="sprint-estado-tag sprint-estado-tag--${p.sprint_estado}">${p.sprint_estado === 'en_curso' ? '▶ En curso' : '⏸ Pendiente'}</span>`
+      : '';
+
     return `
       <div class="kanban-card sprint-card" draggable="true"
-           data-id="${p.id}" data-col="${col}" data-estado="${escHtml(p.estado)}">
+           data-id="${p.id}" data-col="${col}" data-estado="${escHtml(p.estado)}"
+           data-sprint-estado="${p.sprint_estado || ''}">
         <div class="kanban-card-title">${escHtml(p.nombre)}</div>
         <div class="kanban-card-meta">
-          ${badgeEstado(p.estado)}${badgePrio(p.prioridad)}${saludHtml}${fechaHtml}
+          ${sprintEstadoTag}${badgeEstado(p.estado)}${badgePrio(p.prioridad)}${saludHtml}${fechaHtml}
         </div>
         ${tecs.length ? `<div class="kanban-card-tecs">${tecs.map(t => `<span class="kanban-tec">${escHtml(t)}</span>`).join('')}</div>` : ''}
         ${commentFooter}
       </div>`;
   }
 
-  function renderSprintInfoBar(sprint) {
+  function renderSprintInfoBar(sprint, board) {
     const total = sprint.total_projects || 0;
     const done  = sprint.completed_projects || 0;
     const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
@@ -2676,25 +2681,75 @@ async function renderSprints() {
       completado:  { label: 'Completado',  color: '#3aaa68' },
     };
     const m = estadoMeta[sprint.estado] || estadoMeta.planificado;
+
+    // Days remaining
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const fin   = new Date(sprint.fecha_fin); fin.setHours(0, 0, 0, 0);
+    const daysLeft = Math.round((fin - today) / 86400000);
+    let daysChip = '';
+    if (sprint.estado === 'activo') {
+      const dColor = daysLeft < 0 ? 'var(--red)' : daysLeft <= 3 ? '#e85820' : daysLeft <= 7 ? 'var(--yellow)' : 'var(--text2)';
+      const dLabel = daysLeft < 0 ? `Vencido hace ${Math.abs(daysLeft)}d` : daysLeft === 0 ? 'Vence hoy' : `${daysLeft}d restantes`;
+      daysChip = `<span class="sprint-days-chip" style="color:${dColor};border-color:${dColor}30">${dLabel}</span>`;
+    }
+
+    // Active projects breakdown
+    const activos = board?.activos || [];
+    const pendiente = activos.filter(p => p.sprint_estado === 'pendiente').length;
+    const enCurso   = activos.filter(p => p.sprint_estado === 'en_curso').length;
+
+    // Per-technician stats
+    const tecMap = {};
+    [...activos, ...(board?.completados || [])].forEach(p => {
+      if (!p.tecnicos) return;
+      p.tecnicos.split(',').filter(Boolean).forEach(t => {
+        t = t.trim();
+        if (!t) return;
+        if (!tecMap[t]) tecMap[t] = { total: 0, done: 0 };
+        tecMap[t].total++;
+        if (p.sprint_estado === 'completado') tecMap[t].done++;
+      });
+    });
+
+    const hasStats = sprint.estado === 'activo' && (enCurso > 0 || pendiente > 0 || Object.keys(tecMap).length > 0);
+    const statsRow = hasStats ? `
+      <div class="sprint-stats-row">
+        <div class="sprint-breakdown">
+          ${enCurso  > 0 ? `<span class="sbd-chip sbd-en-curso">▶ ${enCurso} en curso</span>` : ''}
+          ${pendiente > 0 ? `<span class="sbd-chip sbd-pendiente">⏸ ${pendiente} pendiente${pendiente > 1 ? 's' : ''}</span>` : ''}
+        </div>
+        ${Object.keys(tecMap).length > 0 ? `
+          <div class="sprint-tec-stats">
+            ${Object.entries(tecMap).map(([name, st]) => {
+              const p = st.total > 0 ? Math.round((st.done / st.total) * 100) : 0;
+              return `<span class="sprint-tec-chip" title="${escHtml(name)}: ${st.done}/${st.total} completados">${escHtml(name.split(' ')[0])} <span class="stc-pct">${p}%</span></span>`;
+            }).join('')}
+          </div>` : ''}
+      </div>` : '';
+
     const infoEl = document.getElementById('sprint-info-bar');
     infoEl.className = 'sprint-info-bar';
     infoEl.innerHTML = `
-      <div class="sprint-info-left">
-        <span class="sprint-estado-badge" style="background:${m.color}20;color:${m.color};border:1px solid ${m.color}50">${m.label}</span>
-        ${sprint.objetivo ? `<span class="sprint-objetivo">${escHtml(sprint.objetivo)}</span>` : ''}
-        <span class="sprint-fechas">${sprint.fecha_inicio} → ${sprint.fecha_fin}</span>
+      <div class="sprint-info-main">
+        <div class="sprint-info-left">
+          <span class="sprint-estado-badge" style="background:${m.color}20;color:${m.color};border:1px solid ${m.color}50">${m.label}</span>
+          ${sprint.objetivo ? `<span class="sprint-objetivo">${escHtml(sprint.objetivo)}</span>` : ''}
+          <span class="sprint-fechas">${sprint.fecha_inicio} → ${sprint.fecha_fin}</span>
+          ${daysChip}
+        </div>
+        <div class="sprint-progress-wrap">
+          <span class="sprint-progress-label">${done}/${total}</span>
+          <div class="sprint-progress-bar"><div class="sprint-progress-fill" style="width:${pct}%"></div></div>
+          <span class="sprint-progress-label">${pct}%</span>
+        </div>
+        <div class="sprint-info-actions">
+          ${sprint.estado === 'planificado' ? `<button class="btn btn-sm btn-primary" data-sprint-action="activar">▶ Activar</button>` : ''}
+          ${sprint.estado === 'activo' ? `<button class="btn btn-sm" style="background:#3aaa68;color:#fff" data-sprint-action="completar">✓ Completar</button>` : ''}
+          <button class="btn btn-sm btn-ghost" data-sprint-action="editar">✏ Editar</button>
+          <button class="btn btn-sm btn-ghost" style="color:var(--red)" data-sprint-action="eliminar">🗑</button>
+        </div>
       </div>
-      <div class="sprint-progress-wrap">
-        <span class="sprint-progress-label">${done}/${total}</span>
-        <div class="sprint-progress-bar"><div class="sprint-progress-fill" style="width:${pct}%"></div></div>
-        <span class="sprint-progress-label">${pct}%</span>
-      </div>
-      <div class="sprint-info-actions">
-        ${sprint.estado === 'planificado' ? `<button class="btn btn-sm btn-primary" data-sprint-action="activar">▶ Activar</button>` : ''}
-        ${sprint.estado === 'activo' ? `<button class="btn btn-sm" style="background:#3aaa68;color:#fff" data-sprint-action="completar">✓ Completar</button>` : ''}
-        <button class="btn btn-sm btn-ghost" data-sprint-action="editar">✏ Editar</button>
-        <button class="btn btn-sm btn-ghost" style="color:var(--red)" data-sprint-action="eliminar">🗑</button>
-      </div>
+      ${statsRow}
     `;
     document.querySelectorAll('[data-sprint-action]').forEach(btn => {
       btn.addEventListener('click', async () => {
@@ -2727,8 +2782,9 @@ async function renderSprints() {
     const colHtml = (col, label, items) => {
       const emptyHint = items.length === 0
         ? `<div class="sprint-drop-hint">Arrastrá proyectos aquí</div>` : '';
+      const compactClass = items.length > 5 ? ' sprint-col--compact' : '';
       return `
-        <div class="sprint-col" data-col="${col}">
+        <div class="sprint-col${compactClass}" data-col="${col}">
           <div class="sprint-col-header sprint-col-${col}">
             <span>${label}</span>
             <span style="font-size:11px;opacity:.6">${items.length}</span>
@@ -2867,7 +2923,7 @@ async function renderSprints() {
     }
     const q = cuStatus ? { clickup_status: cuStatus } : {};
     const board = await api.getSprintBoard(sprintId, q);
-    renderSprintInfoBar(board.sprint);
+    renderSprintInfoBar(board.sprint, board);
     renderBoard(board);
   }
 

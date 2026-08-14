@@ -3427,8 +3427,8 @@ tbody tr { transition: background .1s; }
 /* ── Info bar del sprint activo ── */
 .sprint-info-bar {
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  gap: 0;
   padding: 10px 16px;
   background: var(--bg2);
   border: 1px solid var(--border);
@@ -3436,8 +3436,14 @@ tbody tr { transition: background .1s; }
   border-radius: var(--radius);
   margin-bottom: 14px;
   flex-shrink: 0;
-  flex-wrap: wrap;
   min-height: 46px;
+}
+
+.sprint-info-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
 .sprint-info-left {
@@ -3510,6 +3516,74 @@ tbody tr { transition: background .1s; }
   gap: 6px;
   align-items: center;
   flex-shrink: 0;
+}
+
+/* ── Days remaining chip ── */
+.sprint-days-chip {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Sprint stats row (breakdown + tec chips) ── */
+.sprint-stats-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 7px;
+  margin-top: 7px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+
+.sprint-breakdown {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.sbd-chip {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 3px;
+  white-space: nowrap;
+}
+.sbd-en-curso  { background: rgba(80,144,208,.12); color: #5090d0; border: 1px solid rgba(80,144,208,.3); }
+.sbd-pendiente { background: rgba(122,132,148,.1); color: #7a8494; border: 1px solid rgba(122,132,148,.25); }
+
+.sprint-tec-stats {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-left: auto;
+}
+
+.sprint-tec-chip {
+  font-size: 11px;
+  color: var(--text2);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 2px 7px;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.stc-pct {
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--accent);
 }
 
 /* ── Board wrapper: ocupa el espacio restante ── */
@@ -3805,9 +3879,54 @@ tbody tr { transition: background .1s; }
   transition: background .15s;
 }
 
-.sprint-col[data-col="activos"] .sprint-card::before   { background: #5090d030; }
+.sprint-col[data-col="activos"] .sprint-card::before                              { background: #5090d030; }
+.sprint-col[data-col="activos"] .sprint-card[data-sprint-estado="en_curso"]::before  { background: #5090d0; }
+.sprint-col[data-col="activos"] .sprint-card[data-sprint-estado="pendiente"]::before { background: #58606f60; }
 .sprint-col[data-col="completados"] .sprint-card::before { background: #3AC87A30; }
-.sprint-card:hover::before                              { background: var(--accent); }
+.sprint-card:hover::before                               { background: var(--accent); }
+
+/* ── Sprint estado tag (badge dentro de la card: Pendiente / En curso) ── */
+.sprint-estado-tag {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.sprint-estado-tag--pendiente {
+  background: rgba(122,132,148,.1);
+  color: #7a8494;
+  border: 1px solid rgba(122,132,148,.25);
+}
+.sprint-estado-tag--en_curso {
+  background: rgba(80,144,208,.12);
+  color: #5090d0;
+  border: 1px solid rgba(80,144,208,.3);
+}
+
+/* ── Compact mode: columnas con más de 5 proyectos ── */
+.sprint-col--compact .kanban-card {
+  padding: 8px 10px;
+}
+.sprint-col--compact .kanban-card-title {
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.sprint-col--compact .kanban-card-meta {
+  gap: 4px;
+}
+.sprint-col--compact .kanban-card-tecs {
+  margin-top: 4px;
+  gap: 3px;
+}
+.sprint-col--compact .sc-footer {
+  margin-top: 5px;
+  padding-top: 5px;
+}
 
 /* ── Responsive ── */
 @media (max-width: 1100px) {
