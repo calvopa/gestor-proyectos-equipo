@@ -276,17 +276,13 @@ ${lines}`;
 
     const raw = await openclawSummary(prompt) || 'No se pudo generar resumen.';
 
-    // Parse: summary = first 2 lines (Avanzó + Pendiente), advice = Consejo line
+    // Extract exactly the 3 structured lines, ignoring preamble/trailing text
     const rawLines = raw.split('\n').map(l => l.trim()).filter(Boolean);
-    const consejoIdx = rawLines.findIndex(l => /consejo/i.test(l));
-    let summary, advice;
-    if (consejoIdx !== -1) {
-      summary = rawLines.slice(0, consejoIdx).join('\n').trim();
-      advice  = rawLines.slice(consejoIdx).join('\n').trim();
-    } else {
-      summary = raw.trim();
-      advice  = '';
-    }
+    const avanzoLine   = rawLines.find(l => /^[\-▸•*]?\s*avanz/i.test(l));
+    const pendienteLine = rawLines.find(l => /^[\-▸•*]?\s*pendiente/i.test(l));
+    const consejoLine  = rawLines.find(l => /^[\-▸•*]?\s*consejo/i.test(l));
+    const summary = [avanzoLine, pendienteLine].filter(Boolean).join('\n') || raw.trim();
+    const advice  = consejoLine || '';
 
     db.prepare(
       'UPDATE weekly_snapshots SET ai_summary=? WHERE project_id=? AND week_start=?'

@@ -2,10 +2,15 @@
 function parseAiResponse(rawSummary, cachedAdvice) {
   if (!rawSummary) return ['', ''];
   if (cachedAdvice !== undefined && cachedAdvice !== null) return [rawSummary, cachedAdvice || ''];
+  // Extract exactly the 3 structured lines from raw DB text
   const lines = rawSummary.split('\n').map(l => l.trim()).filter(Boolean);
-  const consejoIdx = lines.findIndex(l => /consejo/i.test(l));
-  if (consejoIdx === -1) return [rawSummary.trim(), ''];
-  return [lines.slice(0, consejoIdx).join('\n'), lines.slice(consejoIdx).join('\n')];
+  const avanzo    = lines.find(l => /^[\-▸•*]?\s*avanz/i.test(l));
+  const pendiente = lines.find(l => /^[\-▸•*]?\s*pendiente/i.test(l));
+  const consejo   = lines.find(l => /^[\-▸•*]?\s*consejo/i.test(l));
+  if (avanzo || pendiente) {
+    return [[avanzo, pendiente].filter(Boolean).join('\n'), consejo || ''];
+  }
+  return [rawSummary.trim(), ''];
 }
 
 function renderAiResult(summary, advice, pid) {
