@@ -4,6 +4,7 @@ const telegram  = require('./telegram');
 
 let syncTimer   = null;
 let dailyTimer  = null;
+let botPolling  = false;
 
 // ── ClickUp sync loop ─────────────────────────────────────
 function start() {
@@ -18,11 +19,13 @@ function start() {
   }
 
   scheduleDailyAi();
+  startBotPolling();
 }
 
 function stop() {
   if (syncTimer)  { clearInterval(syncTimer);  syncTimer  = null; }
   if (dailyTimer) { clearTimeout(dailyTimer);  dailyTimer = null; }
+  botPolling = false;
 }
 
 // ── Daily AI summary at 9 AM ──────────────────────────────
@@ -155,6 +158,120 @@ async function sendTelegramDigest(summaries) {
 
 function escapeHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Telegram bot polling ──────────────────────────────────
+async function startBotPolling() {
+  if (!process.env.TELEGRAM_BOT_TOKEN) return;
+  botPolling = true;
+  let offset = 0;
+  console.log('[bot] polling started');
+
+  while (botPolling) {
+    try {
+      const updates = await telegram.getUpdates(offset);
+      for (const upd of updates) {
+        offset = upd.update_id + 1;
+        const msg = upd.message;
+        if (!msg?.text) continue;
+        await handleBotMessage(msg).catch(e =>
+          console.error('[bot] handler error:', e.message)
+        );
+      }
+    } catch (e) {
+      if (botPolling) {
+        console.error('[bot] poll error:', e.message);
+        await new Promise(r => setTimeout(r, 5000));
+      }
+    }
+  }
+}
+
+const PRIO_ICON = { critica: '🔴', alta: '🟠', media: '🟡', baja: '⚪' };
+const ESTADO_ICON = { en_curso: '🟢', pausado: '⏸', backlog: '📋', cerrado: '✅' };
+
+async function handleBotMessage(msg) {
+  const chatId = msg.chat.id;
+  const text   = msg.text.trim();
+  const { getDb } = require('../db');
+  const db = getDb();
+
+  // /proyectos — lista activos
+  if (text === '/proyectos' || text === '/start') {
+    const rows = db.prepare(
+      "SELECT nombre, estado, prioridad FROM projects WHERE estado IN ('en_curso','pausado') ORDER BY prioridad DESC, nombre"
+    ).all();
+    const lines = rows.map(p =>
+      `${ESTADO_ICON[p.estado]||'·'} ${PRIO_ICON[p.prioridad]||'⚪'} ${escapeHtml(p.nombre)}`
+    ).join('\n');
+    return telegram.sendMessage(`📋 <b>Proyectos activos (${rows.length})</b>\n\n${lines}`, chatId);
+  }
+
+  // /resumen — digest completo
+  if (text === '/resumen' || text === '/digest') {
+    const rows = db.prepare(
+      "SELECT nombre, prioridad, ai_summary FROM projects WHERE estado IN ('en_curso','pausado') AND ai_summary IS NOT NULL ORDER BY prioridad DESC"
+    ).all();
+    const summaries = rows.map(p => {
+      const { summary, advice } = openclaw.parseStructured(p.ai_summary);
+      return summary ? { nombre: p.nombre, prioridad: p.prioridad, summary, advice } : null;
+    }).filter(Boolean);
+
+    if (!summaries.length) return telegram.sendMessage('Sin resúmenes disponibles. Generá uno desde el Gestor.', chatId);
+
+    const date = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+    const blocks = summaries.map(s => {
+      const adv = s.advice ? `\n💡 ${escapeHtml(s.advice)}` : '';
+      return `${PRIO_ICON[s.prioridad]||'⚪'} <b>${escapeHtml(s.nombre)}</b>\n${escapeHtml(s.summary)}${adv}`;
+    });
+    const header = `📊 <b>Resumen GCS</b>\n${date}\n\n`;
+    const chunks = [];
+    let cur = header;
+    for (const block of blocks) {
+      const next = cur + (cur === header ? '' : '\n\n') + block;
+      if (next.length > 3800 && cur !== header) { chunks.push(cur); cur = block; }
+      else cur = next;
+    }
+    if (cur) chunks.push(cur);
+    for (const chunk of chunks) await telegram.sendMessage(chunk, chatId);
+    return;
+  }
+
+  // Búsqueda por nombre de proyecto
+  const q = `%${text}%`;
+  const matches = db.prepare(
+    "SELECT * FROM projects WHERE nombre LIKE ? ORDER BY CASE estado WHEN 'en_curso' THEN 0 WHEN 'pausado' THEN 1 ELSE 2 END LIMIT 3"
+  ).all(q);
+
+  if (!matches.length) {
+    return telegram.sendMessage(
+      `No encontré proyectos con "<b>${escapeHtml(text)}</b>".\n\nUsá /proyectos para ver todos los activos.`,
+      chatId
+    );
+  }
+
+  for (const p of matches) {
+    const estadoIcon = ESTADO_ICON[p.estado] || '·';
+    const prioIcon   = PRIO_ICON[p.prioridad] || '⚪';
+    const vence = p.fecha_fin_est ? `\n📅 Vence: ${p.fecha_fin_est}` : '';
+    const equipo = p.tecnicos ? `\n👥 ${escapeHtml(p.tecnicos)}` : '';
+
+    let aiBlock = '';
+    if (p.ai_summary) {
+      const { summary, advice } = openclaw.parseStructured(p.ai_summary);
+      if (summary) aiBlock = `\n\n${escapeHtml(summary)}`;
+      if (advice)  aiBlock += `\n💡 ${escapeHtml(advice)}`;
+    } else {
+      aiBlock = '\n\n<i>Sin análisis IA. Generalo desde el Gestor.</i>';
+    }
+
+    const reply =
+      `${estadoIcon} ${prioIcon} <b>${escapeHtml(p.nombre)}</b>` +
+      `\n${escapeHtml(p.estado)}${p.clickup_status ? ' / ' + escapeHtml(p.clickup_status) : ''}` +
+      vence + equipo + aiBlock;
+
+    await telegram.sendMessage(reply, chatId);
+  }
 }
 
 module.exports = { start, stop };
