@@ -3168,6 +3168,26 @@ tr.fila-yellow:hover td { background: rgba(240,192,48,.08); }
   font-size: 12px;
   color: var(--red);
 }
+.proj-ai-advice {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(0,122,255,.05);
+  border: 1px solid rgba(0,122,255,.18);
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.6;
+  white-space: pre-line;
+}
+.proj-ai-advice-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: #007AFF;
+  margin-bottom: 3px;
+}
 
 /* ── Sofia Chat Widget ── */
 #sofia-fab {

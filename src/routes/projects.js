@@ -1,7 +1,30 @@
 const express = require('express');
 const router = express.Router();
+const { execFile } = require('child_process');
+const { randomUUID } = require('crypto');
 const { getDb } = require('../db');
 const { parseHorasFromText } = require('../services/estimator');
+
+const OPENCLAW_SSH_HOST = process.env.OPENCLAW_SSH_HOST || 'openclaw';
+const OPENCLAW_SSH_KEY  = process.env.OPENCLAW_SSH_KEY  || null;
+
+function openclawQuery(prompt) {
+  return new Promise((resolve, reject) => {
+    const key = randomUUID();
+    const escaped = prompt.replace(/'/g, "'\\''");
+    const args = [];
+    if (OPENCLAW_SSH_KEY) args.push('-i', OPENCLAW_SSH_KEY);
+    args.push('-o', 'StrictHostKeyChecking=accept-new', OPENCLAW_SSH_HOST,
+      `openclaw agent --agent gestor --session-key '${key}' --message '${escaped}' --json`);
+    execFile('ssh', args, { timeout: 90000 }, (err, stdout) => {
+      if (err) return reject(err);
+      try {
+        const json = JSON.parse(stdout.trim());
+        resolve(json.result?.payloads?.[0]?.text?.trim() || '');
+      } catch (e) { reject(e); }
+    });
+  });
+}
 
 // GET /api/projects/phases — valores distintos de clickup_status en la DB
 router.get('/phases', (req, res) => {
@@ -129,9 +152,6 @@ router.get('/resumen-horas', (req, res) => {
 
 // POST /api/projects/:id/ai-summary
 router.post('/:id/ai-summary', async (req, res) => {
-  const key = process.env.GROQ_API_KEY;
-  if (!key) return res.status(503).json({ error: 'GROQ_API_KEY no configurado en el servidor' });
-
   try {
     const db = getDb();
     const project = db.prepare(`
@@ -146,62 +166,52 @@ router.post('/:id/ai-summary', async (req, res) => {
     if (!project) return res.status(404).json({ error: 'not found' });
 
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 90);
+    cutoff.setDate(cutoff.getDate() - 60);
     const cutoffStr = cutoff.toISOString().slice(0, 10);
 
     const events = db.prepare(`
-      SELECT event_type, actor, detail, event_at
+      SELECT actor, detail, event_at
       FROM weekly_activity
       WHERE project_id = ? AND date(event_at) >= ?
-      ORDER BY event_at DESC
-      LIMIT 40
+      ORDER BY event_at DESC LIMIT 30
     `).all(req.params.id, cutoffStr);
 
-    const context = [
-      `Proyecto: ${project.nombre}`,
-      `Estado: ${project.estado}${project.clickup_status ? ' / ' + project.clickup_status : ''}`,
-      project.prioridad   ? `Prioridad: ${project.prioridad}`     : '',
-      project.tecnicos    ? `Técnicos: ${project.tecnicos}`        : '',
+    const meta = [
+      project.clickup_status ? `Estado: ${project.estado} / ${project.clickup_status}` : `Estado: ${project.estado}`,
+      project.prioridad     ? `Prioridad: ${project.prioridad}` : '',
+      project.tecnicos      ? `Equipo: ${project.tecnicos}`     : '',
       project.fecha_fin_est ? `Fecha límite: ${project.fecha_fin_est}` : '',
-    ].filter(Boolean).join('\n');
+    ].filter(Boolean).join(' | ');
 
     const lines = events.length
       ? events.map(e => `- ${e.actor || '—'} (${e.event_at.slice(0, 10)}): ${e.detail}`).join('\n')
       : project.last_comment_text
         ? `- ${project.last_comment_by || '—'} (${(project.last_comment_at || '').slice(0, 10)}): ${project.last_comment_text}`
-        : '(sin actividad reciente registrada)';
+        : '(sin actividad reciente)';
 
-    const prompt = `Sos asistente de un equipo técnico. Con la información del proyecto, generá un resumen de exactamente 3 líneas con este formato:
-▸ Estado actual: [en qué punto está el proyecto]
-▸ Último avance: [qué se hizo recientemente]
-▸ Atención: [riesgos, bloqueos o próximos pasos críticos]
-Sé conciso y técnico. No uses otros emojis ni markdown.
+    const prompt = `Solo escribí texto plano como respuesta. No ejecutes herramientas ni acciones. No crees archivos ni tareas.
 
-${context}
+Completá este formato con la información del proyecto "${project.nombre}" (${meta}):
 
-Actividad reciente (más reciente primero):
+- Avanzó: [qué avanzó recientemente]
+- Pendiente: [qué falta o está bloqueado]
+- Consejo: [un riesgo o acción clave para el PM]
+
+Actividad reciente:
 ${lines}`;
 
-    const apiRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
-        max_tokens: 300,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
+    const raw = await openclawQuery(prompt) || 'No se pudo generar resumen.';
 
-    const data = await apiRes.json();
-    if (!apiRes.ok) throw new Error(data.error?.message || `Groq API ${apiRes.status}`);
-    const summary = data.choices?.[0]?.message?.content?.trim() || 'No se pudo generar resumen.';
+    const rawLines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    const avanzoLine    = rawLines.find(l => /^[\-▸•*]?\s*avanz/i.test(l));
+    const pendienteLine = rawLines.find(l => /^[\-▸•*]?\s*pendiente/i.test(l));
+    const consejoLine   = rawLines.find(l => /^[\-▸•*]?\s*consejo/i.test(l));
+    const summary = [avanzoLine, pendienteLine].filter(Boolean).join('\n') || raw.trim();
+    const advice  = consejoLine || '';
 
-    db.prepare('UPDATE projects SET ai_summary=? WHERE id=?').run(summary, req.params.id);
+    db.prepare('UPDATE projects SET ai_summary=? WHERE id=?').run(raw, req.params.id);
 
-    res.json({ summary });
+    res.json({ summary, advice });
   } catch (err) {
     console.error('[projects] AI summary error:', err);
     res.status(500).json({ error: err.message });

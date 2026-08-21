@@ -374,6 +374,12 @@ async function renderDashboard() {
 // ── ① Projects table ──────────────────────────────────────
 const projectAiCache = new Map();
 
+function renderProjectAiResult(summary, advice) {
+  const sum = summary ? `<div class="proj-ai-result">${escHtml(summary)}</div>` : '';
+  const adv = advice  ? `<div class="proj-ai-advice"><span class="proj-ai-advice-label">Consejo PM</span>${escHtml(advice)}</div>` : '';
+  return sum + adv;
+}
+
 function saveProjectFilters(f) {
   try { localStorage.setItem('gestor_proj_filters', JSON.stringify(f)); } catch {}
 }
@@ -615,15 +621,16 @@ async function renderProjects(params = {}) {
       row.style.display = '';
       // Cached result
       if (projectAiCache.has(id)) {
-        box.innerHTML = `<div class="proj-ai-result">${escHtml(projectAiCache.get(id))}</div>`;
+        const c = projectAiCache.get(id);
+        box.innerHTML = renderProjectAiResult(c.summary, c.advice);
         return;
       }
-      box.innerHTML = '<div class="proj-ai-loading">✨ Generando resumen con IA…</div>';
+      box.innerHTML = '<div class="proj-ai-loading">✨ Generando…</div>';
       btn.disabled = true;
       try {
-        const { summary } = await api.getProjectAiSummary(id);
-        projectAiCache.set(id, summary);
-        box.innerHTML = `<div class="proj-ai-result">${escHtml(summary)}</div>`;
+        const { summary, advice } = await api.getProjectAiSummary(id);
+        projectAiCache.set(id, { summary, advice });
+        box.innerHTML = renderProjectAiResult(summary, advice);
       } catch (e) {
         box.innerHTML = `<div class="proj-ai-error">${escHtml(e.message)}</div>`;
       } finally {
@@ -1119,6 +1126,26 @@ async function renderProjectDetail({ id }) {
       ⚠ Este proyecto tiene el cómputo de horas desactivado. Las horas se registran pero <strong>no suman al total contabilizado global</strong>. Activalo en "Editar proyecto" para incluirlas.
     </div>` : ''}
 
+    <!-- AI Summary -->
+    <div class="card" style="margin-bottom:20px" id="proj-detail-ai-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${p.ai_summary ? '12px' : '0'}">
+        <span style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.4px">✨ Análisis IA</span>
+        <button class="btn btn-ghost btn-sm" id="btn-proj-ai" style="font-size:12px">
+          ${p.ai_summary ? '↺ Regenerar' : '✨ Analizar con Sofia'}
+        </button>
+      </div>
+      <div id="proj-detail-ai-box">
+        ${p.ai_summary ? (() => {
+          const lines = p.ai_summary.split('\n').map(l => l.trim()).filter(Boolean);
+          const avanzo    = lines.find(l => /^[\-▸•*]?\s*avanz/i.test(l));
+          const pendiente = lines.find(l => /^[\-▸•*]?\s*pendiente/i.test(l));
+          const consejo   = lines.find(l => /^[\-▸•*]?\s*consejo/i.test(l));
+          const sum = [avanzo, pendiente].filter(Boolean).join('\n') || p.ai_summary;
+          return renderProjectAiResult(sum, consejo || '');
+        })() : ''}
+      </div>
+    </div>
+
     <div class="detail-grid">
       <div>
         <!-- Timer -->
@@ -1195,6 +1222,26 @@ async function renderProjectDetail({ id }) {
 
   document.getElementById('btn-back').addEventListener('click', () => navigate('projects'));
   document.getElementById('btn-edit-project').addEventListener('click', () => showProjectModal(id));
+
+  // AI analysis button
+  document.getElementById('btn-proj-ai').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-proj-ai');
+    const box = document.getElementById('proj-detail-ai-box');
+    const origText = btn.textContent.trim();
+    btn.disabled = true; btn.textContent = '⏳ Generando…';
+    try {
+      const { summary, advice } = await api.getProjectAiSummary(id);
+      box.innerHTML = renderProjectAiResult(summary, advice);
+      btn.textContent = '↺ Regenerar';
+      document.querySelector('#proj-detail-ai-card [style*="margin-bottom"]')
+        ?.setAttribute('style', document.querySelector('#proj-detail-ai-card [style*="margin-bottom"]').getAttribute('style').replace('margin-bottom:0', 'margin-bottom:12px'));
+    } catch (e) {
+      box.innerHTML = `<div class="proj-ai-error">${escHtml(e.message)}</div>`;
+      btn.textContent = origText;
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   // Load time entries
   loadEntries(id);
