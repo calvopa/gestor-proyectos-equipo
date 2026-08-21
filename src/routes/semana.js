@@ -1,8 +1,35 @@
 const express = require('express');
 const router = express.Router();
+const { execFile } = require('child_process');
+const { randomUUID } = require('crypto');
 const { getDb } = require('../db');
 const { getToken, fetchWeekActivity } = require('../services/clickup');
 const { generateEstimates } = require('../services/estimator');
+
+const OPENCLAW_SSH_HOST = process.env.OPENCLAW_SSH_HOST || 'openclaw';
+const OPENCLAW_SSH_KEY  = process.env.OPENCLAW_SSH_KEY  || null;
+
+function sshArgs(remoteCmd) {
+  const args = [];
+  if (OPENCLAW_SSH_KEY) args.push('-i', OPENCLAW_SSH_KEY);
+  args.push('-o', 'StrictHostKeyChecking=accept-new', OPENCLAW_SSH_HOST, remoteCmd);
+  return args;
+}
+
+function openclawSummary(prompt) {
+  return new Promise((resolve, reject) => {
+    const key = randomUUID();
+    const escaped = prompt.replace(/'/g, "'\\''");
+    const remoteCmd = `openclaw agent --agent gestor --session-key '${key}' --message '${escaped}' --json`;
+    execFile('ssh', sshArgs(remoteCmd), { timeout: 90000 }, (err, stdout) => {
+      if (err) return reject(err);
+      try {
+        const json = JSON.parse(stdout.trim());
+        resolve(json.result?.payloads?.[0]?.text?.trim() || '');
+      } catch (e) { reject(e); }
+    });
+  });
+}
 
 const SALUD_SCORE = { green: 3, yellow: 2, red: 1, grey: 0, cerrado: -1, backlog: -1 };
 
@@ -208,14 +235,11 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST /api/semana/ai-summary
+// POST /api/semana/ai-summary  (usa OpenClaw/Sofia — sin dependencia Groq)
 router.post('/ai-summary', async (req, res) => {
   const { project_id, week_start } = req.body;
   if (!project_id || !week_start)
     return res.status(400).json({ error: 'project_id y week_start requeridos' });
-
-  const key = process.env.GROQ_API_KEY;
-  if (!key) return res.status(503).json({ error: 'GROQ_API_KEY no configurado en el servidor' });
 
   try {
     const db = getDb();
@@ -236,33 +260,18 @@ router.post('/ai-summary', async (req, res) => {
       'SELECT spc.comment AS sprint_comment FROM projects p LEFT JOIN sprint_project_comments spc ON spc.project_id=p.id AND spc.sprint_id=(SELECT id FROM sprints WHERE estado=\'activo\' ORDER BY id DESC LIMIT 1) WHERE p.id=?'
     ).get(project_id);
     const sprintCommentLine = snap?.sprint_comment
-      ? `\nNota interna del sprint (contexto adicional para el resumen):\n"${snap.sprint_comment}"\n`
+      ? `\nNota interna del sprint (contexto adicional):\n"${snap.sprint_comment}"\n`
       : '';
 
     const prompt = `Sos asistente de un equipo técnico. Con los comentarios de la semana del proyecto "${project.nombre}", generá un resumen de exactamente 2 líneas con este formato:
 ▸ Avanzó: [qué se hizo]
 ▸ Pendiente: [qué quedó sin resolver]
-Sé conciso y técnico. No uses otros emojis.
+Sé conciso y técnico. No uses otros emojis. Respondé solo las 2 líneas, sin explicaciones adicionales.
 ${sprintCommentLine}
 Comentarios:
 ${lines}`;
 
-    const apiRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'llama3-8b-8192',
-        max_tokens: 220,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
-
-    const data = await apiRes.json();
-    if (!apiRes.ok) throw new Error(data.error?.message || `Groq API ${apiRes.status}`);
-    const summary = data.choices?.[0]?.message?.content?.trim() || 'No se pudo generar resumen.';
+    const summary = await openclawSummary(prompt) || 'No se pudo generar resumen.';
 
     db.prepare(
       'UPDATE weekly_snapshots SET ai_summary=? WHERE project_id=? AND week_start=?'
