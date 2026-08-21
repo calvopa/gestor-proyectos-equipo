@@ -80,6 +80,66 @@ settings:   clave, valor (ClickUp token, team_id, etc.)
 - `normalizePhone(raw)` convierte números locales argentinos a E.164 (+549...)
 - Frontend muestra burbuja verde con Enviar ✓ / Cancelar antes de enviar
 
+## OpenClaw service compartido
+
+`src/services/openclaw.js` — wrapper compartido usado por semana.js, projects.js y scheduler.js.
+
+```js
+// query(prompt) → string (texto crudo del modelo)
+// parseStructured(raw) → { summary, advice }
+//   - summary: líneas "Avanzó" + "Pendiente" unidas
+//   - advice:  línea "Consejo"
+```
+
+**Formato de prompt obligatorio** (cualquier prompt que genere un resumen estructurado):
+```
+Solo escribí texto plano como respuesta. No ejecutes herramientas ni acciones. No crees archivos ni tareas.
+
+Completá este formato con la información del proyecto "X" (meta):
+
+- Avanzó: [qué avanzó recientemente]
+- Pendiente: [qué falta o está bloqueado]
+- Consejo: [un riesgo o acción clave para el PM]
+
+Actividad reciente:
+- Actor (fecha): detalle
+```
+
+> CRÍTICO: no usar framing de rol PM ("Sos Project Manager", "analizá", "generá análisis") — dispara tool-call hallucination en qwen2.5. El formato fill-in-the-blank es el único que funciona.
+
+## Telegram bot + digest diario
+
+**Env vars necesarias:**
+- `TELEGRAM_BOT_TOKEN` — token del bot (formato `123456:AAExxx`)
+- `TELEGRAM_CHAT_ID` — chat ID default para digest diario
+
+**Servicio:** `src/services/telegram.js`
+- `sendMessage(text, chat_id?)` — envía mensaje HTML parse_mode
+- `getUpdates(offset)` — long-poll (timeout:20s), no requiere URL pública
+
+**Scheduler** (`src/services/scheduler.js`) — maneja 3 tareas:
+1. **ClickUp sync** — `setInterval` cada 30 min
+2. **Daily AI summaries** — `setTimeout` al próximo 9:00 AM local → genera resúmenes IA de todos los proyectos `en_curso`/`pausado` → guarda en `projects.ai_summary` → envía digest Telegram
+3. **Bot polling** — loop `while(botPolling)` con `getUpdates` (long-poll)
+
+**Comandos del bot:**
+| Comando | Respuesta |
+|---|---|
+| `/start` o `/proyectos` | Lista proyectos activos con iconos de estado y prioridad |
+| `/resumen` o `/digest` | Digest completo desde DB (chunked a 3800 chars) |
+| `<texto libre>` | Busca proyectos cuyo nombre contenga el texto → devuelve estado + AI summary |
+
+**Iconos usados:** `🔴🟠🟡⚪` prioridad · `🟢⏸📋✅` estado
+
+## Rutas AI summary
+
+| Ruta | Archivo | Persiste en |
+|---|---|---|
+| `POST /api/projects/:id/ai-summary` | `projects.js` | `projects.ai_summary` |
+| `POST /api/semana/ai-summary` | `semana.js` | `weekly_snapshots.ai_summary` |
+
+Ambas usan `openclaw.query()` + `openclaw.parseStructured()`. Responden `{ summary, advice }`.
+
 ## Compaction hints
 
 Al compactar esta conversación, preservar siempre:
@@ -87,6 +147,7 @@ Al compactar esta conversación, preservar siempre:
 - Arquitectura de Sofia: agente `gestor`, session key UUID efímero, no historial propio
 - Comando de deploy (git push + SSH pull + docker compose up --build)
 - Puerto 3100, DB en volumen `gestor-proyectos-data`
+- Formato de prompt fill-in-the-blank para evitar hallucination de tool-calls en OpenClaw
 
 ## Bugs conocidos / lecciones aprendidas
 
@@ -95,3 +156,5 @@ Al compactar esta conversación, preservar siempre:
 3. Session key fija → OpenClaw carga historial de disco → context overflow → usar UUID efímero por llamada
 4. Marcadores `===` en prompts → qwen2.5 los interpreta como tool response delimiters → usar texto plano
 5. gemma2:9b (8192 tokens) → demasiado pequeño para el system prompt de OpenClaw → usar qwen2.5:14b
+6. Prompts con framing PM ("Sos PM", "analizá", "generá") → qwen2.5 devuelve respuestas tipo `{"name":"write","arguments":{...}}` (tool-call hallucination). Fix: formato fill-in-the-blank con "Solo escribí texto plano. No ejecutes herramientas."
+7. Digest Telegram con 27 proyectos excede 4096 chars → chunkear a 3800 chars enviando múltiples mensajes secuenciales
