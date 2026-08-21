@@ -1,5 +1,6 @@
 const { runSync } = require('./clickup');
-const openclaw = require('./openclaw');
+const openclaw  = require('./openclaw');
+const telegram  = require('./telegram');
 
 let syncTimer   = null;
 let dailyTimer  = null;
@@ -62,6 +63,7 @@ async function runDailyAiSummaries() {
   const cutoffStr = cutoff.toISOString().slice(0, 10);
 
   let ok = 0, fail = 0;
+  const summaries = []; // collect for Telegram
 
   for (const project of projects) {
     try {
@@ -101,6 +103,8 @@ ${lines}`;
       if (!raw) { fail++; continue; }
 
       db.prepare('UPDATE projects SET ai_summary=? WHERE id=?').run(raw, project.id);
+      const { summary, advice } = openclaw.parseStructured(raw);
+      summaries.push({ nombre: project.nombre, prioridad: project.prioridad, summary, advice });
       ok++;
       console.log(`[scheduler] AI summary ok: "${project.nombre}"`);
     } catch (e) {
@@ -110,6 +114,32 @@ ${lines}`;
   }
 
   console.log(`[scheduler] daily AI done — ok:${ok} fail:${fail}`);
+  await sendTelegramDigest(summaries);
+}
+
+async function sendTelegramDigest(summaries) {
+  if (!summaries.length) return;
+  try {
+    const PRIO = { critica: '🔴', alta: '🟠', media: '🟡', baja: '⚪' };
+    const date = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+    const lines = summaries.map(s => {
+      const icon = PRIO[s.prioridad] || '⚪';
+      const sum  = s.summary ? `\n${s.summary}` : '';
+      const adv  = s.advice  ? `\n💡 ${s.advice}` : '';
+      return `${icon} <b>${escapeHtml(s.nombre)}</b>${sum}${adv}`;
+    }).join('\n\n');
+
+    const msg = `📊 <b>Resumen diario GCS</b>\n${date}\n\n${lines}`;
+    await telegram.sendMessage(msg);
+    console.log('[scheduler] Telegram digest sent');
+  } catch (e) {
+    console.error('[scheduler] Telegram error:', e.message);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 module.exports = { start, stop };
