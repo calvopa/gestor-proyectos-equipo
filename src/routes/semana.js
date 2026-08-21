@@ -263,32 +263,28 @@ router.post('/ai-summary', async (req, res) => {
       ? `\nNota interna del sprint (contexto adicional):\n"${snap.sprint_comment}"\n`
       : '';
 
-    const prompt = `Sos Project Manager de un equipo técnico. Analizá la actividad semanal del proyecto "${project.nombre}" y generá el siguiente análisis estructurado:
+    const prompt = `Solo escribí texto plano como respuesta. No ejecutes herramientas ni acciones. No crees archivos ni tareas.
 
-RESUMEN:
-▸ Avanzó: [qué se completó o avanzó esta semana]
-▸ Pendiente: [qué quedó sin resolver o bloqueado]
+Completá este formato con los comentarios del proyecto "${project.nombre}":
 
-SUGERENCIAS:
-▸ [riesgo detectado o acción recomendada 1]
-▸ [riesgo detectado o acción recomendada 2]
-
-Sé conciso y técnico. Máximo 2 sugerencias. No uses otros emojis ni secciones adicionales. Respondé solo el texto con ese formato exacto.
+▸ Avanzó: [qué se hizo esta semana]
+▸ Pendiente: [qué quedó sin resolver]
+▸ Consejo: [un riesgo o acción clave]
 ${sprintCommentLine}
 Comentarios:
 ${lines}`;
 
     const raw = await openclawSummary(prompt) || 'No se pudo generar resumen.';
 
-    // Parse structured response
-    const lc = raw.toLowerCase();
-    const sugIdx = lc.indexOf('sugerencias:');
+    // Parse: summary = first 2 lines (Avanzó + Pendiente), advice = Consejo line
+    const rawLines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+    const consejoIdx = rawLines.findIndex(l => /consejo/i.test(l));
     let summary, advice;
-    if (sugIdx !== -1) {
-      summary = raw.slice(0, sugIdx).replace(/^resumen:\s*/i, '').trim();
-      advice  = raw.slice(sugIdx + 'sugerencias:'.length).trim();
+    if (consejoIdx !== -1) {
+      summary = rawLines.slice(0, consejoIdx).join('\n').trim();
+      advice  = rawLines.slice(consejoIdx).join('\n').trim();
     } else {
-      summary = raw.replace(/^resumen:\s*/i, '').trim();
+      summary = raw.trim();
       advice  = '';
     }
 

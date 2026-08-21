@@ -2,12 +2,10 @@
 function parseAiResponse(rawSummary, cachedAdvice) {
   if (!rawSummary) return ['', ''];
   if (cachedAdvice !== undefined && cachedAdvice !== null) return [rawSummary, cachedAdvice || ''];
-  const lc = rawSummary.toLowerCase();
-  const sugIdx = lc.indexOf('sugerencias:');
-  if (sugIdx === -1) return [rawSummary.trim(), ''];
-  const summary = rawSummary.slice(0, sugIdx).replace(/^resumen:\s*/i, '').trim();
-  const advice  = rawSummary.slice(sugIdx + 'sugerencias:'.length).trim();
-  return [summary, advice];
+  const lines = rawSummary.split('\n').map(l => l.trim()).filter(Boolean);
+  const consejoIdx = lines.findIndex(l => /consejo/i.test(l));
+  if (consejoIdx === -1) return [rawSummary.trim(), ''];
+  return [lines.slice(0, consejoIdx).join('\n'), lines.slice(consejoIdx).join('\n')];
 }
 
 function renderAiResult(summary, advice, pid) {
