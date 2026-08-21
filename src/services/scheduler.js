@@ -104,7 +104,7 @@ ${lines}`;
 
       db.prepare('UPDATE projects SET ai_summary=? WHERE id=?').run(raw, project.id);
       const { summary, advice } = openclaw.parseStructured(raw);
-      summaries.push({ nombre: project.nombre, prioridad: project.prioridad, summary, advice });
+      if (summary) summaries.push({ nombre: project.nombre, prioridad: project.prioridad, summary, advice });
       ok++;
       console.log(`[scheduler] AI summary ok: "${project.nombre}"`);
     } catch (e) {
@@ -123,16 +123,31 @@ async function sendTelegramDigest(summaries) {
     const PRIO = { critica: '🔴', alta: '🟠', media: '🟡', baja: '⚪' };
     const date = new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
 
-    const lines = summaries.map(s => {
+    const blocks = summaries.map(s => {
       const icon = PRIO[s.prioridad] || '⚪';
-      const sum  = s.summary ? `\n${s.summary}` : '';
-      const adv  = s.advice  ? `\n💡 ${s.advice}` : '';
-      return `${icon} <b>${escapeHtml(s.nombre)}</b>${sum}${adv}`;
-    }).join('\n\n');
+      const adv  = s.advice ? `\n💡 ${escapeHtml(s.advice)}` : '';
+      return `${icon} <b>${escapeHtml(s.nombre)}</b>\n${escapeHtml(s.summary)}${adv}`;
+    });
 
-    const msg = `📊 <b>Resumen diario GCS</b>\n${date}\n\n${lines}`;
-    await telegram.sendMessage(msg);
-    console.log('[scheduler] Telegram digest sent');
+    // Split into chunks under 3800 chars
+    const header = `📊 <b>Resumen diario GCS</b>\n${date}\n\n`;
+    const chunks = [];
+    let current = header;
+    for (const block of blocks) {
+      const candidate = current + (current === header ? '' : '\n\n') + block;
+      if (candidate.length > 3800 && current !== header) {
+        chunks.push(current);
+        current = block;
+      } else {
+        current = candidate;
+      }
+    }
+    if (current) chunks.push(current);
+
+    for (const chunk of chunks) {
+      await telegram.sendMessage(chunk);
+    }
+    console.log(`[scheduler] Telegram digest sent (${chunks.length} mensaje/s, ${summaries.length} proyectos)`);
   } catch (e) {
     console.error('[scheduler] Telegram error:', e.message);
   }
