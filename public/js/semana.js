@@ -10,16 +10,18 @@ function parseAiResponse(rawSummary, cachedAdvice) {
   return [summary, advice];
 }
 
-function renderAiResult(summary, advice) {
+function renderAiResult(summary, advice, pid) {
   const sum = `<div class="sem-ai-result">${escHtml(summary)}</div>`;
-  if (!advice) return sum;
-  return sum + `<div class="sem-ai-advice"><div class="sem-ai-advice-label">Sugerencias PM</div>${escHtml(advice)}</div>`;
+  const adv = advice ? `<div class="sem-ai-advice"><div class="sem-ai-advice-label">Sugerencias PM</div>${escHtml(advice)}</div>` : '';
+  const regen = pid ? `<button class="sem-ai-regen-btn sem-ai-btn" data-pid="${pid}" title="Regenerar resumen">↺</button>` : '';
+  return `<div class="sem-ai-result-wrap">${sum}${adv}${regen}</div>`;
 }
 
-function renderPresAiResult(summary, advice) {
+function renderPresAiResult(summary, advice, pid) {
   const sum = `<div class="sem-pres-ai">${escHtml(summary)}</div>`;
-  if (!advice) return sum;
-  return sum + `<div class="sem-pres-ai-advice"><div class="sem-pres-ai-advice-label">Sugerencias PM</div>${escHtml(advice)}</div>`;
+  const adv = advice ? `<div class="sem-pres-ai-advice"><div class="sem-pres-ai-advice-label">Sugerencias PM</div>${escHtml(advice)}</div>` : '';
+  const regen = pid ? `<button class="sem-pres-ai-btn sem-pres-ai-regen-btn" data-pid="${pid}" title="Regenerar resumen">↺ Regenerar</button>` : '';
+  return `${sum}${adv}${regen}`;
 }
 
 // ── Semana helpers ────────────────────────────────────────
@@ -260,21 +262,24 @@ function semanaRenderFull() {
   document.getElementById('sem-export-sheets')?.addEventListener('click', semanaExportSheets);
   document.getElementById('sem-present').addEventListener('click', semanaEnterPresentation);
 
-  main.querySelectorAll('.sem-ai-btn').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const pid = btn.dataset.pid;
-      btn.disabled = true; btn.textContent = '⏳';
-      try {
-        const r = await api.getSemanaAiSummary(pid, from);
-        const box = document.getElementById(`sem-ai-box-${pid}`);
-        if (box) box.innerHTML = renderAiResult(r.summary, r.advice);
-        const proj = semanaState.data.projects.find(p => String(p.id) === String(pid));
-        if (proj) { proj.ai_summary = r.summary; proj.ai_advice = r.advice; }
-      } catch (e) {
-        toast(e.message, 'error');
-        btn.disabled = false; btn.textContent = '✨ Resumir con IA';
-      }
-    });
+  // Delegado: cubre .sem-ai-btn (primer resumen) y .sem-ai-regen-btn (regenerar)
+  main.addEventListener('click', async e => {
+    const btn = e.target.closest('.sem-ai-btn');
+    if (!btn || btn.disabled) return;
+    const pid = btn.dataset.pid;
+    if (!pid) return;
+    const origText = btn.textContent;
+    btn.disabled = true; btn.textContent = '⏳';
+    try {
+      const r = await api.getSemanaAiSummary(pid, from);
+      const box = document.getElementById(`sem-ai-box-${pid}`);
+      if (box) box.innerHTML = renderAiResult(r.summary, r.advice, pid);
+      const proj = semanaState.data.projects.find(p => String(p.id) === String(pid));
+      if (proj) { proj.ai_summary = r.summary; proj.ai_advice = r.advice; }
+    } catch (e) {
+      toast(e.message, 'error');
+      btn.disabled = false; btn.textContent = origText;
+    }
   });
 }
 
@@ -356,7 +361,7 @@ function semanaCardHtml(p, aiEnabled, weekStart) {
   const aiBox = aiEnabled ? `
     <div id="sem-ai-box-${p.id}" class="sem-ai-box">
       ${p.ai_summary
-        ? renderAiResult(...parseAiResponse(p.ai_summary, p.ai_advice))
+        ? renderAiResult(...parseAiResponse(p.ai_summary, p.ai_advice), p.id)
         : `<button class="btn btn-ghost btn-sm sem-ai-btn" data-pid="${p.id}">✨ Resumir con IA</button>`}
     </div>` : '';
 
@@ -495,29 +500,30 @@ function semanaPresentDraw(overlay, data, dir = null) {
   document.getElementById('sem-pres-close').addEventListener('click', () =>
     semanaExitPresentation(overlay));
 
-  // Botón IA en presentación
-  const aiBtn = overlay.querySelector('.sem-pres-ai-btn');
-  if (aiBtn) {
-    aiBtn.addEventListener('click', async () => {
-      const pid = aiBtn.dataset.pid;
-      aiBtn.disabled = true;
-      aiBtn.textContent = '⏳ Generando…';
-      try {
-        const r = await api.getSemanaAiSummary(pid, data.week_start);
-        const box = document.getElementById(`pres-ai-box-${pid}`);
-        if (box) {
-          box.className = 'sem-pres-ai-wrap';
-          box.innerHTML = renderPresAiResult(r.summary, r.advice);
-        }
-        const proj = semanaState.data.projects.find(p => String(p.id) === String(pid));
-        if (proj) { proj.ai_summary = r.summary; proj.ai_advice = r.advice; }
-      } catch (e) {
-        aiBtn.disabled = false;
-        aiBtn.textContent = '✨ Resumir con IA';
-        toast(e.message, 'error');
+  // Botón IA en presentación (delegado: cubre primer resumen y regenerar)
+  overlay.addEventListener('click', async e => {
+    const btn = e.target.closest('.sem-pres-ai-btn');
+    if (!btn || btn.disabled) return;
+    const pid = btn.dataset.pid;
+    if (!pid) return;
+    const origText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '⏳ Generando…';
+    try {
+      const r = await api.getSemanaAiSummary(pid, data.week_start);
+      const box = document.getElementById(`pres-ai-box-${pid}`);
+      if (box) {
+        box.className = 'sem-pres-ai-wrap';
+        box.innerHTML = renderPresAiResult(r.summary, r.advice, pid);
       }
-    });
-  }
+      const proj = semanaState.data.projects.find(p => String(p.id) === String(pid));
+      if (proj) { proj.ai_summary = r.summary; proj.ai_advice = r.advice; }
+    } catch (e) {
+      btn.disabled = false;
+      btn.textContent = origText;
+      toast(e.message, 'error');
+    }
+  });
 
   document.getElementById('sem-pres-prev').addEventListener('click', () => {
     if (semanaState.presentIdx > 0) { semanaState.presentIdx--; semanaPresentDraw(overlay, data, 'prev'); }
@@ -580,7 +586,7 @@ function semanaPresentCardHtml(p, weekStart) {
 
   const [parsedSum, parsedAdv] = parseAiResponse(p.ai_summary, p.ai_advice);
   const aiTxt = p.ai_summary
-    ? `<div class="sem-pres-ai-wrap" id="pres-ai-box-${p.id}">${renderPresAiResult(parsedSum, parsedAdv)}</div>`
+    ? `<div class="sem-pres-ai-wrap" id="pres-ai-box-${p.id}">${renderPresAiResult(parsedSum, parsedAdv, p.id)}</div>`
     : `<div class="sem-pres-ai-box" id="pres-ai-box-${p.id}">
          <button class="sem-pres-ai-btn" data-pid="${p.id}">✨ Resumir con IA</button>
        </div>`;
