@@ -1,3 +1,27 @@
+// ── AI result helpers ─────────────────────────────────────
+function parseAiResponse(rawSummary, cachedAdvice) {
+  if (!rawSummary) return ['', ''];
+  if (cachedAdvice !== undefined && cachedAdvice !== null) return [rawSummary, cachedAdvice || ''];
+  const lc = rawSummary.toLowerCase();
+  const sugIdx = lc.indexOf('sugerencias:');
+  if (sugIdx === -1) return [rawSummary.trim(), ''];
+  const summary = rawSummary.slice(0, sugIdx).replace(/^resumen:\s*/i, '').trim();
+  const advice  = rawSummary.slice(sugIdx + 'sugerencias:'.length).trim();
+  return [summary, advice];
+}
+
+function renderAiResult(summary, advice) {
+  const sum = `<div class="sem-ai-result">${escHtml(summary)}</div>`;
+  if (!advice) return sum;
+  return sum + `<div class="sem-ai-advice"><div class="sem-ai-advice-label">Sugerencias PM</div>${escHtml(advice)}</div>`;
+}
+
+function renderPresAiResult(summary, advice) {
+  const sum = `<div class="sem-pres-ai">${escHtml(summary)}</div>`;
+  if (!advice) return sum;
+  return sum + `<div class="sem-pres-ai-advice"><div class="sem-pres-ai-advice-label">Sugerencias PM</div>${escHtml(advice)}</div>`;
+}
+
 // ── Semana helpers ────────────────────────────────────────
 function swFmtHoras(seg) {
   if (!seg) return null;
@@ -243,10 +267,9 @@ function semanaRenderFull() {
       try {
         const r = await api.getSemanaAiSummary(pid, from);
         const box = document.getElementById(`sem-ai-box-${pid}`);
-        if (box) box.innerHTML = `<div class="sem-ai-result">${escHtml(r.summary)}</div>`;
-        // Update cached data
+        if (box) box.innerHTML = renderAiResult(r.summary, r.advice);
         const proj = semanaState.data.projects.find(p => String(p.id) === String(pid));
-        if (proj) proj.ai_summary = r.summary;
+        if (proj) { proj.ai_summary = r.summary; proj.ai_advice = r.advice; }
       } catch (e) {
         toast(e.message, 'error');
         btn.disabled = false; btn.textContent = '✨ Resumir con IA';
@@ -333,7 +356,7 @@ function semanaCardHtml(p, aiEnabled, weekStart) {
   const aiBox = aiEnabled ? `
     <div id="sem-ai-box-${p.id}" class="sem-ai-box">
       ${p.ai_summary
-        ? `<div class="sem-ai-result">${escHtml(p.ai_summary)}</div>`
+        ? renderAiResult(...parseAiResponse(p.ai_summary, p.ai_advice))
         : `<button class="btn btn-ghost btn-sm sem-ai-btn" data-pid="${p.id}">✨ Resumir con IA</button>`}
     </div>` : '';
 
@@ -483,11 +506,11 @@ function semanaPresentDraw(overlay, data, dir = null) {
         const r = await api.getSemanaAiSummary(pid, data.week_start);
         const box = document.getElementById(`pres-ai-box-${pid}`);
         if (box) {
-          box.className = 'sem-pres-ai';
-          box.textContent = r.summary;
+          box.className = 'sem-pres-ai-wrap';
+          box.innerHTML = renderPresAiResult(r.summary, r.advice);
         }
         const proj = semanaState.data.projects.find(p => String(p.id) === String(pid));
-        if (proj) proj.ai_summary = r.summary;
+        if (proj) { proj.ai_summary = r.summary; proj.ai_advice = r.advice; }
       } catch (e) {
         aiBtn.disabled = false;
         aiBtn.textContent = '✨ Resumir con IA';
@@ -555,8 +578,9 @@ function semanaPresentCardHtml(p, weekStart) {
     ? `<div class="sem-pres-fase-change">Cambio de fase: ${escHtml(p.fase_prev || '')} → ${escHtml(p.clickup_status || '')}</div>`
     : '';
 
+  const [parsedSum, parsedAdv] = parseAiResponse(p.ai_summary, p.ai_advice);
   const aiTxt = p.ai_summary
-    ? `<div class="sem-pres-ai" id="pres-ai-box-${p.id}">${escHtml(p.ai_summary)}</div>`
+    ? `<div class="sem-pres-ai-wrap" id="pres-ai-box-${p.id}">${renderPresAiResult(parsedSum, parsedAdv)}</div>`
     : `<div class="sem-pres-ai-box" id="pres-ai-box-${p.id}">
          <button class="sem-pres-ai-btn" data-pid="${p.id}">✨ Resumir con IA</button>
        </div>`;

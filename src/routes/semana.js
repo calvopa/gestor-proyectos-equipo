@@ -263,21 +263,40 @@ router.post('/ai-summary', async (req, res) => {
       ? `\nNota interna del sprint (contexto adicional):\n"${snap.sprint_comment}"\n`
       : '';
 
-    const prompt = `Sos asistente de un equipo técnico. Con los comentarios de la semana del proyecto "${project.nombre}", generá un resumen de exactamente 2 líneas con este formato:
-▸ Avanzó: [qué se hizo]
-▸ Pendiente: [qué quedó sin resolver]
-Sé conciso y técnico. No uses otros emojis. Respondé solo las 2 líneas, sin explicaciones adicionales.
+    const prompt = `Sos Project Manager de un equipo técnico. Analizá la actividad semanal del proyecto "${project.nombre}" y generá el siguiente análisis estructurado:
+
+RESUMEN:
+▸ Avanzó: [qué se completó o avanzó esta semana]
+▸ Pendiente: [qué quedó sin resolver o bloqueado]
+
+SUGERENCIAS:
+▸ [riesgo detectado o acción recomendada 1]
+▸ [riesgo detectado o acción recomendada 2]
+
+Sé conciso y técnico. Máximo 2 sugerencias. No uses otros emojis ni secciones adicionales. Respondé solo el texto con ese formato exacto.
 ${sprintCommentLine}
 Comentarios:
 ${lines}`;
 
-    const summary = await openclawSummary(prompt) || 'No se pudo generar resumen.';
+    const raw = await openclawSummary(prompt) || 'No se pudo generar resumen.';
+
+    // Parse structured response
+    const lc = raw.toLowerCase();
+    const sugIdx = lc.indexOf('sugerencias:');
+    let summary, advice;
+    if (sugIdx !== -1) {
+      summary = raw.slice(0, sugIdx).replace(/^resumen:\s*/i, '').trim();
+      advice  = raw.slice(sugIdx + 'sugerencias:'.length).trim();
+    } else {
+      summary = raw.replace(/^resumen:\s*/i, '').trim();
+      advice  = '';
+    }
 
     db.prepare(
       'UPDATE weekly_snapshots SET ai_summary=? WHERE project_id=? AND week_start=?'
-    ).run(summary, project_id, week_start);
+    ).run(raw, project_id, week_start);
 
-    res.json({ summary });
+    res.json({ summary, advice });
   } catch (err) {
     console.error('[semana] AI summary error:', err);
     res.status(500).json({ error: err.message });
