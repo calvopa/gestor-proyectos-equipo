@@ -1,35 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { execFile } = require('child_process');
-const { randomUUID } = require('crypto');
 const { getDb } = require('../db');
 const { getToken, fetchWeekActivity } = require('../services/clickup');
 const { generateEstimates } = require('../services/estimator');
-
-const OPENCLAW_SSH_HOST = process.env.OPENCLAW_SSH_HOST || 'openclaw';
-const OPENCLAW_SSH_KEY  = process.env.OPENCLAW_SSH_KEY  || null;
-
-function sshArgs(remoteCmd) {
-  const args = [];
-  if (OPENCLAW_SSH_KEY) args.push('-i', OPENCLAW_SSH_KEY);
-  args.push('-o', 'StrictHostKeyChecking=accept-new', OPENCLAW_SSH_HOST, remoteCmd);
-  return args;
-}
-
-function openclawSummary(prompt) {
-  return new Promise((resolve, reject) => {
-    const key = randomUUID();
-    const escaped = prompt.replace(/'/g, "'\\''");
-    const remoteCmd = `openclaw agent --agent gestor --session-key '${key}' --message '${escaped}' --json`;
-    execFile('ssh', sshArgs(remoteCmd), { timeout: 90000 }, (err, stdout) => {
-      if (err) return reject(err);
-      try {
-        const json = JSON.parse(stdout.trim());
-        resolve(json.result?.payloads?.[0]?.text?.trim() || '');
-      } catch (e) { reject(e); }
-    });
-  });
-}
+const openclaw = require('../services/openclaw');
 
 const SALUD_SCORE = { green: 3, yellow: 2, red: 1, grey: 0, cerrado: -1, backlog: -1 };
 
@@ -274,15 +248,8 @@ ${sprintCommentLine}
 Comentarios:
 ${lines}`;
 
-    const raw = await openclawSummary(prompt) || 'No se pudo generar resumen.';
-
-    // Extract exactly the 3 structured lines, ignoring preamble/trailing text
-    const rawLines = raw.split('\n').map(l => l.trim()).filter(Boolean);
-    const avanzoLine   = rawLines.find(l => /^[\-▸•*]?\s*avanz/i.test(l));
-    const pendienteLine = rawLines.find(l => /^[\-▸•*]?\s*pendiente/i.test(l));
-    const consejoLine  = rawLines.find(l => /^[\-▸•*]?\s*consejo/i.test(l));
-    const summary = [avanzoLine, pendienteLine].filter(Boolean).join('\n') || raw.trim();
-    const advice  = consejoLine || '';
+    const raw = await openclaw.query(prompt) || 'No se pudo generar resumen.';
+    const { summary, advice } = openclaw.parseStructured(raw);
 
     db.prepare(
       'UPDATE weekly_snapshots SET ai_summary=? WHERE project_id=? AND week_start=?'
