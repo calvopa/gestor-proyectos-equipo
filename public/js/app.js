@@ -374,10 +374,42 @@ async function renderDashboard() {
 // ── ① Projects table ──────────────────────────────────────
 const projectAiCache = new Map();
 
+function parseStructuredText(raw) {
+  const lines = (raw || '').split('\n').map(l => l.trim()).filter(Boolean);
+  const avanzo    = lines.find(l => /^[\-▸•*]?\s*avanz/i.test(l));
+  const pendiente = lines.find(l => /^[\-▸•*]?\s*pendiente/i.test(l));
+  const consejo   = lines.find(l => /^[\-▸•*]?\s*consejo/i.test(l));
+  const summary = [avanzo, pendiente].filter(Boolean).join('\n') || (raw || '').trim();
+  return { summary, advice: consejo || '' };
+}
+
 function renderProjectAiResult(summary, advice) {
-  const sum = summary ? `<div class="proj-ai-result">${escHtml(summary)}</div>` : '';
-  const adv = advice  ? `<div class="proj-ai-advice"><span class="proj-ai-advice-label">Consejo PM</span>${escHtml(advice)}</div>` : '';
-  return sum + adv;
+  function extractText(line) {
+    return (line || '').replace(/^[\-▸•*]?\s*(avanz[oó]|pendiente|consejo\s*pm?)\s*:\s*/i, '').trim();
+  }
+  const lines = (summary || '').split('\n').map(l => l.trim()).filter(Boolean);
+  const avanzoLine    = lines.find(l => /^[\-▸•*]?\s*avanz/i.test(l));
+  const pendienteLine = lines.find(l => /^[\-▸•*]?\s*pendiente/i.test(l));
+  const avanzoText    = extractText(avanzoLine    || lines[0] || '');
+  const pendienteText = extractText(pendienteLine || lines[1] || '');
+  const consejoText   = extractText(advice || '');
+  const mkSection = (cls, icon, label, text) => text
+    ? `<div class="proj-ai-section proj-ai-${cls}">
+        <span class="proj-ai-section-icon">${icon}</span>
+        <div class="proj-ai-section-body">
+          <div class="proj-ai-section-label">${label}</div>
+          <div class="proj-ai-section-text">${escHtml(text)}</div>
+        </div>
+       </div>`
+    : '';
+  const html = [
+    mkSection('avanzo',    '✅', 'Avanzó',    avanzoText),
+    mkSection('pendiente', '⏳', 'Pendiente', pendienteText),
+    mkSection('consejo',   '💡', 'Consejo',   consejoText),
+  ].filter(Boolean).join('');
+  return html
+    ? `<div class="proj-ai-sections">${html}</div>`
+    : `<div class="proj-ai-error">Sin datos estructurados.</div>`;
 }
 
 function saveProjectFilters(f) {
@@ -520,7 +552,7 @@ async function renderProjects(params = {}) {
                   </td>
                   <td id="hours-${p.id}" style="font-size:13px">—</td>
                   <td style="white-space:nowrap">
-                    <button class="btn btn-ghost btn-sm btn-ai-project" data-id="${p.id}" title="Resumen IA">✨</button>
+                    <button class="btn btn-ghost btn-sm btn-ai-project" data-id="${p.id}" title="${p.ai_summary ? 'Ver resumen IA' : 'Generar resumen IA'}">✨${p.ai_summary ? '<span class="ai-dot"></span>' : ''}</button>
                     <button class="btn btn-ghost btn-sm btn-edit-project" data-id="${p.id}">✎</button>
                     <button class="btn btn-danger btn-sm btn-del-project" data-id="${p.id}">✕</button>
                   </td>
@@ -625,7 +657,11 @@ async function renderProjects(params = {}) {
         box.innerHTML = renderProjectAiResult(c.summary, c.advice);
         return;
       }
-      box.innerHTML = '<div class="proj-ai-loading">✨ Generando…</div>';
+      box.innerHTML = `<div class="proj-ai-skeleton">
+        <div class="proj-ai-skel-line" style="width:82%"></div>
+        <div class="proj-ai-skel-line" style="width:65%"></div>
+        <div class="proj-ai-skel-line" style="width:74%"></div>
+      </div>`;
       btn.disabled = true;
       try {
         const { summary, advice } = await api.getProjectAiSummary(id);
@@ -637,6 +673,14 @@ async function renderProjects(params = {}) {
         btn.disabled = false;
       }
     });
+  });
+
+  // Pre-populate AI cache from summaries already stored in DB
+  filtered.forEach(p => {
+    const sid = String(p.id);
+    if (p.ai_summary && !projectAiCache.has(sid)) {
+      projectAiCache.set(sid, parseStructuredText(p.ai_summary));
+    }
   });
 
   document.getElementById('btn-export-sheets-projects').addEventListener('click', () => projectsExportSheets(filtered));
@@ -1135,14 +1179,7 @@ async function renderProjectDetail({ id }) {
         </button>
       </div>
       <div id="proj-detail-ai-box">
-        ${p.ai_summary ? (() => {
-          const lines = p.ai_summary.split('\n').map(l => l.trim()).filter(Boolean);
-          const avanzo    = lines.find(l => /^[\-▸•*]?\s*avanz/i.test(l));
-          const pendiente = lines.find(l => /^[\-▸•*]?\s*pendiente/i.test(l));
-          const consejo   = lines.find(l => /^[\-▸•*]?\s*consejo/i.test(l));
-          const sum = [avanzo, pendiente].filter(Boolean).join('\n') || p.ai_summary;
-          return renderProjectAiResult(sum, consejo || '');
-        })() : ''}
+        ${p.ai_summary ? (() => { const s = parseStructuredText(p.ai_summary); return renderProjectAiResult(s.summary, s.advice); })() : ''}
       </div>
     </div>
 
@@ -1229,12 +1266,17 @@ async function renderProjectDetail({ id }) {
     const box = document.getElementById('proj-detail-ai-box');
     const origText = btn.textContent.trim();
     btn.disabled = true; btn.textContent = '⏳ Generando…';
+    box.innerHTML = `<div class="proj-ai-skeleton">
+      <div class="proj-ai-skel-line" style="width:80%"></div>
+      <div class="proj-ai-skel-line" style="width:62%"></div>
+      <div class="proj-ai-skel-line" style="width:71%"></div>
+    </div>`;
     try {
       const { summary, advice } = await api.getProjectAiSummary(id);
       box.innerHTML = renderProjectAiResult(summary, advice);
       btn.textContent = '↺ Regenerar';
-      document.querySelector('#proj-detail-ai-card [style*="margin-bottom"]')
-        ?.setAttribute('style', document.querySelector('#proj-detail-ai-card [style*="margin-bottom"]').getAttribute('style').replace('margin-bottom:0', 'margin-bottom:12px'));
+      document.getElementById('proj-detail-ai-card')?.querySelector('[style*="margin-bottom:0"]')
+        ?.style.setProperty('margin-bottom', '12px');
     } catch (e) {
       box.innerHTML = `<div class="proj-ai-error">${escHtml(e.message)}</div>`;
       btn.textContent = origText;
