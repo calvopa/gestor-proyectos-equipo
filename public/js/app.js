@@ -1656,6 +1656,8 @@ async function renderGantt() {
   let filterSearch = '';
   let filterEstado = '';
 
+  let ganttDayW = null;
+
   function buildChart(filtered) {
     if (!filtered.length) {
       return `<div class="empty" style="margin-top:40px"><div class="empty-icon">📅</div>
@@ -1679,7 +1681,7 @@ async function renderGantt() {
     maxDate.setHours(0, 0, 0, 0);
 
     const totalDays = Math.round((maxDate - minDate) / 86400000);
-    const DAY_W = Math.max(6, Math.min(32, Math.floor(1100 / totalDays)));
+    const DAY_W = ganttDayW || Math.max(6, Math.min(32, Math.floor(1100 / totalDays)));
     const totalW  = totalDays * DAY_W;
     const todayX  = Math.round((today - minDate) / 86400000) * DAY_W;
 
@@ -1706,7 +1708,16 @@ async function renderGantt() {
 
     const gridLines = weekLines.map(x =>
       `<div class="gantt-grid-line" style="left:${x}px"></div>`).join('');
-    const todayLine = `<div class="gantt-today-line" style="left:${todayX}px"></div>`;
+    const weekendHtml = (() => {
+      const cols = []; const d = new Date(minDate);
+      while (d < maxDate) {
+        const dow = d.getDay();
+        if (dow === 0 || dow === 6) cols.push(Math.round((d - minDate) / 86400000) * DAY_W);
+        d.setDate(d.getDate() + 1);
+      }
+      return cols.map(x => `<div class="gantt-weekend" style="left:${x}px;width:${DAY_W}px"></div>`).join('');
+    })();
+    const todayLine = `<div class="gantt-today-line" style="left:${todayX}px"><span class="gantt-today-lbl">HOY</span></div>`;
     const monthsHtml = monthMarkers.map(m =>
       `<div class="gantt-month-label" style="left:${m.left}px;width:${m.w}px">${m.label}</div>`).join('');
 
@@ -1731,19 +1742,32 @@ async function renderGantt() {
         ? `<span class="gantt-prio-dot gantt-prio-${p.prioridad}" title="Prioridad ${p.prioridad}"></span>`
         : '';
 
+      const tecsHtml = tecs.slice(0, 3).map(t => {
+        const ini = t.split(/\s+/).map(w => w[0] || '').join('').toUpperCase().slice(0, 2);
+        return `<span class="gantt-tec-avatar" title="${escHtml(t)}">${ini}</span>`;
+      }).join('');
+      const faseHtml = p.clickup_status
+        ? `<span class="gantt-fase-tag">${escHtml(p.clickup_status)}</span>` : '';
+      const nameSub = (faseHtml || tecsHtml) ? `<div class="gantt-name-sub">${faseHtml}${tecsHtml}</div>` : '';
+
       return `
         <div class="gantt-row${lateClass}" data-id="${p.id}" data-estado="${p.estado}">
           <div class="gantt-name-col">
             <span class="semaforo semaforo-${salud.level}" style="flex-shrink:0" title="${escHtml(salud.detalle)}"></span>
             ${prioDot}
-            <span class="gantt-name-text" title="${escHtml(p.nombre)}">${escHtml(p.nombre)}</span>
-            <span class="gantt-due-chip ${dueClass}">${dueLbl}</span>
+            <div class="gantt-name-info">
+              <div class="gantt-name-main">
+                <span class="gantt-name-text" title="${escHtml(p.nombre)}">${escHtml(p.nombre)}</span>
+                <span class="gantt-due-chip ${dueClass}">${dueLbl}</span>
+              </div>
+              ${nameSub}
+            </div>
           </div>
           <div class="gantt-chart-col" style="width:${totalW}px">
-            ${gridLines}${todayLine}
+            ${weekendHtml}${gridLines}${todayLine}
             <div class="gantt-bar gantt-bar-${salud.level}${!hasStart ? ' gantt-bar-nostart' : ''}"
                  style="left:${barLeft}px;width:${barW}px"
-                 title="${escHtml(p.nombre)}&#10;${p.fecha_inicio ? p.fecha_inicio + ' → ' : '→ '}${p.fecha_fin_est}${tecs.length ? '&#10;' + tecs.join(', ') : ''}">
+                 title="${escHtml(p.nombre)} · ${p.fecha_inicio ? p.fecha_inicio + ' → ' : '→ '}${p.fecha_fin_est}${tecs.length ? '\n👥 ' + tecs.join(', ') : ''}">
               <span class="gantt-bar-label">${escHtml(p.nombre)}</span>
             </div>
           </div>
@@ -1752,7 +1776,7 @@ async function renderGantt() {
 
     const headerChartHtml = `
       <div class="gantt-chart-col gantt-month-row" style="width:${totalW}px">
-        ${monthsHtml}${gridLines}${todayLine}
+        ${weekendHtml}${monthsHtml}${gridLines}${todayLine}
       </div>`;
 
     return `
@@ -1836,9 +1860,13 @@ async function renderGantt() {
         <option value="pausado">Pausado</option>
         <option value="cerrado">Cerrado</option>
       </select>
-      <span style="font-size:12px;color:var(--text2);margin-left:auto">
-        Solo proyectos con fecha de vencimiento · <span class="gantt-today-dot"></span> Hoy
-      </span>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:4px">
+        <span style="font-size:11px;color:var(--text2);margin-right:2px">Zoom</span>
+        <button class="btn btn-ghost btn-sm" id="gf-zoom-out" title="Alejar" style="font-size:16px;line-height:1;padding:2px 8px">−</button>
+        <button class="btn btn-ghost btn-sm" id="gf-zoom-fit" title="Ajustar al ancho" style="font-size:13px;padding:2px 7px">⊙</button>
+        <button class="btn btn-ghost btn-sm" id="gf-zoom-in"  title="Acercar" style="font-size:16px;line-height:1;padding:2px 8px">+</button>
+        <button class="btn btn-ghost btn-sm" id="gf-today" title="Ir a hoy" style="margin-left:8px;font-size:11px"><span class="gantt-today-dot"></span> Hoy</button>
+      </div>
     </div>
     <div id="gantt-stats-bar" class="gantt-stats-bar"></div>
     <div id="gantt-chart"></div>
@@ -1852,6 +1880,19 @@ async function renderGantt() {
     filterEstado = e.target.value;
     redraw();
   });
+  document.getElementById('gf-zoom-in').addEventListener('click', () => {
+    ganttDayW = Math.min(80, (ganttDayW || 20) + 6);
+    redraw();
+  });
+  document.getElementById('gf-zoom-out').addEventListener('click', () => {
+    ganttDayW = Math.max(4, (ganttDayW || 20) - 6);
+    redraw();
+  });
+  document.getElementById('gf-zoom-fit').addEventListener('click', () => {
+    ganttDayW = null;
+    redraw();
+  });
+  document.getElementById('gf-today').addEventListener('click', scrollToToday);
 
   redraw();
 }
