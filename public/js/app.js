@@ -425,7 +425,7 @@ function loadProjectFilters() {
 function updateProjFilterBadge(f) {
   const badge = document.getElementById('nav-proj-filter-badge');
   if (!badge) return;
-  const active = f && (f.search || f.estado || f.prioridad || f.fase || f.tecnico || f.soloRiesgo);
+  const active = f && (f.search || f.estado || f.prioridad || f.fase || f.tecnico || f.soloRiesgo || f.diasDir);
   badge.style.display = active ? 'inline-flex' : 'none';
 }
 
@@ -442,10 +442,11 @@ async function renderProjects(params = {}) {
     sort      = saved.sort      ?? 'updated_at',
     dir       = saved.dir       ?? 'desc',
     soloRiesgo = saved.soloRiesgo ?? false,
+    diasDir   = saved.diasDir   ?? '',   // '' = sin ordenar por días, 'asc' o 'desc'
     focusSearch = false,
   } = params;
 
-  saveProjectFilters({ search, estado, prioridad, fase, tecnico, sort, dir, soloRiesgo });
+  saveProjectFilters({ search, estado, prioridad, fase, tecnico, sort, dir, soloRiesgo, diasDir });
 
   const main = document.getElementById('main-content');
   main.innerHTML = '<div class="spinner"></div>';
@@ -516,7 +517,7 @@ async function renderProjects(params = {}) {
             ${sortCols.map(([col,label]) =>
               `<th data-col="${col}" data-dir="${sort===col?(dir==='asc'?'desc':'asc'):'asc'}">${label}${sort===col?(dir==='asc'?' ↑':' ↓'):''}</th>`
             ).join('')}
-            <th data-sort-dias title="Ordenar por días sin actividad">Sin actividad ↕</th>
+            <th data-sort-dias data-dias-dir="${diasDir}" title="Ordenar por días sin actividad">Sin actividad ${diasDir==='asc'?'↑':diasDir==='desc'?'↓':'↕'}</th>
             <th>Técnicos</th>
             <th>Último comentario</th>
             <th>Horas</th>
@@ -605,20 +606,29 @@ async function renderProjects(params = {}) {
   }
 
   // Ordenar por días sin actividad (client-side)
-  main.querySelector('[data-sort-dias]')?.addEventListener('click', () => {
+  function applyDiasSort(newDir) {
     const tbody = document.getElementById('projects-tbody');
-    const rows  = [...tbody.querySelectorAll('tr[data-id]')];
-    const btn   = main.querySelector('[data-sort-dias]');
-    const asc   = btn.dataset.diasDir !== 'asc';
-    btn.dataset.diasDir = asc ? 'asc' : 'desc';
-    btn.textContent = `Sin actividad ${asc ? '↑' : '↓'}`;
+    if (!tbody) return;
+    const rows = [...tbody.querySelectorAll('tr[data-id]')];
     rows.sort((a, b) => {
       const da = parseInt(a.querySelector('[data-dias]')?.dataset.dias ?? 9999);
       const db = parseInt(b.querySelector('[data-dias]')?.dataset.dias ?? 9999);
-      return asc ? da - db : db - da;
+      return newDir === 'asc' ? da - db : db - da;
     });
     rows.forEach(r => tbody.appendChild(r));
+    const btn = main.querySelector('[data-sort-dias]');
+    if (btn) { btn.dataset.diasDir = newDir; btn.textContent = `Sin actividad ${newDir === 'asc' ? '↑' : '↓'}`; }
+  }
+
+  main.querySelector('[data-sort-dias]')?.addEventListener('click', () => {
+    const btn    = main.querySelector('[data-sort-dias]');
+    const newDir = btn.dataset.diasDir !== 'asc' ? 'asc' : 'desc';
+    applyDiasSort(newDir);
+    saveProjectFilters({ search, estado, prioridad, fase, tecnico, sort, dir, soloRiesgo, diasDir: newDir });
   });
+
+  // Restaurar orden por días si estaba activo
+  if (diasDir) applyDiasSort(diasDir);
 
   // Filtros event listeners
   document.getElementById('f-search').addEventListener('input', e => {
@@ -645,11 +655,11 @@ async function renderProjects(params = {}) {
   document.getElementById('f-riesgo')?.addEventListener('click', () =>
     renderProjects({ ...getFilters(), sort, dir, soloRiesgo: !soloRiesgo }));
   document.getElementById('f-clear')?.addEventListener('click', () =>
-    renderProjects({ search: '', estado: '', prioridad: '', fase: '', tecnico: '', sort, dir, soloRiesgo: false }));
+    renderProjects({ search: '', estado: '', prioridad: '', fase: '', tecnico: '', sort, dir, soloRiesgo: false, diasDir: '' }));
 
   main.querySelectorAll('th[data-col]').forEach(th => {
     th.addEventListener('click', () => renderProjects({
-      ...getFilters(), sort: th.dataset.col, dir: th.dataset.dir, soloRiesgo
+      ...getFilters(), sort: th.dataset.col, dir: th.dataset.dir, soloRiesgo, diasDir: ''
     }));
   });
 
