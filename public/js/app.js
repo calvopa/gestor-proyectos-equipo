@@ -155,6 +155,8 @@ function diasHtml(p) {
 }
 
 // ── Router ─────────────────────────────────────────────────
+let _projSearchTimer; // global para poder cancelar al navegar
+
 const routes = {
   'dashboard':      renderDashboard,
   'projects':       renderProjects,
@@ -173,6 +175,7 @@ const routes = {
 };
 
 function navigate(route, params = {}) {
+  clearTimeout(_projSearchTimer); // cancelar búsqueda pendiente al cambiar de sección
   state.route = route;
   state.params = params;
   document.querySelectorAll('nav ul li a').forEach(a => {
@@ -414,14 +417,22 @@ function renderProjectAiResult(summary, advice) {
 
 function saveProjectFilters(f) {
   try { localStorage.setItem('gestor_proj_filters', JSON.stringify(f)); } catch {}
+  updateProjFilterBadge(f);
 }
 function loadProjectFilters() {
   try { return JSON.parse(localStorage.getItem('gestor_proj_filters') || 'null'); } catch { return null; }
 }
+function updateProjFilterBadge(f) {
+  const badge = document.getElementById('nav-proj-filter-badge');
+  if (!badge) return;
+  const active = f && (f.search || f.estado || f.prioridad || f.fase || f.tecnico || f.soloRiesgo);
+  badge.style.display = active ? 'inline-flex' : 'none';
+}
 
 async function renderProjects(params = {}) {
-  const fromNav = Object.keys(params).length === 0;
-  const saved   = fromNav ? (loadProjectFilters() || {}) : {};
+  // Siempre cargar filtros guardados como base; params explícitos tienen precedencia.
+  // Esto garantiza que filtros persistan al cambiar de pestaña y volver.
+  const saved = loadProjectFilters() || {};
   const {
     search    = saved.search    ?? '',
     estado    = saved.estado    ?? '',
@@ -610,10 +621,9 @@ async function renderProjects(params = {}) {
   });
 
   // Filtros event listeners
-  let searchTimer;
   document.getElementById('f-search').addEventListener('input', e => {
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(() => renderProjects({ ...getFilters(), search: e.target.value, sort, dir, soloRiesgo, focusSearch: true }), 300);
+    clearTimeout(_projSearchTimer);
+    _projSearchTimer = setTimeout(() => renderProjects({ ...getFilters(), search: e.target.value, sort, dir, soloRiesgo, focusSearch: true }), 300);
   });
 
   // Restaurar foco tras re-render por búsqueda (el input se recrea con innerHTML)
@@ -1805,15 +1815,21 @@ async function renderGantt() {
     const enCurso  = filtered.filter(p => p.estado === 'en_curso').length;
     const pausados = filtered.filter(p => p.estado === 'pausado').length;
     const chips = [
-      atrasados > 0 && `<span class="gsb-chip gsb-late">⚠ ${atrasados} atrasado${atrasados > 1 ? 's' : ''}</span>`,
-      porVencer > 0 && `<span class="gsb-chip gsb-warn">⏰ ${porVencer} por vencer</span>`,
-      enCurso   > 0 && `<span class="gsb-chip gsb-active">▶ ${enCurso} en curso</span>`,
-      pausados  > 0 && `<span class="gsb-chip gsb-paused">⏸ ${pausados} pausado${pausados > 1 ? 's' : ''}</span>`,
+      atrasados > 0 && `<span class="gsb-chip gsb-late">${atrasados} atrasado${atrasados > 1 ? 's' : ''}</span>`,
+      porVencer > 0 && `<span class="gsb-chip gsb-warn">${porVencer} por vencer</span>`,
+      enCurso   > 0 && `<span class="gsb-chip gsb-active">${enCurso} en curso</span>`,
+      pausados  > 0 && `<span class="gsb-chip gsb-paused">${pausados} pausado${pausados > 1 ? 's' : ''}</span>`,
     ].filter(Boolean).join('');
     const el2 = document.getElementById('gantt-stats-bar');
     if (!el2) return;
     el2.innerHTML = `
-      <div class="gsb-chips">${chips || '<span class="gsb-all-ok">✓ Sin proyectos atrasados</span>'}</div>
+      <div class="gsb-chips">${chips || '<span class="gsb-all-ok">Sin retrasos</span>'}</div>
+      <div class="gantt-legend">
+        <span class="gantt-legend-item gantt-legend-green">En plazo</span>
+        <span class="gantt-legend-item gantt-legend-yellow">En riesgo</span>
+        <span class="gantt-legend-item gantt-legend-red">Atrasado</span>
+        <span class="gantt-legend-item gantt-legend-grey">Cerrado</span>
+      </div>
       <span class="gsb-total">${filtered.length} proyecto${filtered.length !== 1 ? 's' : ''}</span>`;
   }
 
@@ -3190,6 +3206,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateAlertBadge();
   });
 
+  updateProjFilterBadge(loadProjectFilters()); // badge de filtros al arrancar
   navigate('dashboard');
   updateSyncStatus();
   updateAlertBadge();
