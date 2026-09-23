@@ -6,6 +6,8 @@ const { getDb } = require('../db');
 
 const OPENCLAW_SSH_HOST = process.env.OPENCLAW_SSH_HOST || 'openclaw';
 const OPENCLAW_SSH_KEY  = process.env.OPENCLAW_SSH_KEY  || null;
+const OLLAMA_URL        = process.env.OLLAMA_URL        || 'http://192.168.1.38:11434';
+const OLLAMA_MODEL      = process.env.OLLAMA_MODEL      || 'qwen2.5:14b';
 const MAX_HISTORY = 4;
 const MAX_PROMPT_CHARS = 7500;   // PERSONA(~1100) + contexto(~3000) + historial + mensaje = ~4600; era 4000 → el mensaje del usuario quedaba cortado
 const MAX_BOT_HISTORY_CHARS = 400;
@@ -140,8 +142,8 @@ function resolveWaMarkers(text, db) {
   });
 }
 
-function buildPrompt(history, message, contexts, waInstruction) {
-  const parts = [PERSONA];
+function buildUserPrompt(history, message, contexts, waInstruction) {
+  const parts = [];
 
   if (waInstruction) {
     parts.push(waInstruction);
@@ -258,8 +260,28 @@ function buildAutoContext(db) {
   }
 }
 
+async function ollamaChat(system, user) {
+  const res = await fetch(`${OLLAMA_URL}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: OLLAMA_MODEL,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user',   content: user },
+      ],
+      stream: false,
+      options: { temperature: 0.5, num_predict: 1024 },
+    }),
+    signal: AbortSignal.timeout(120000),
+  });
+  if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
+  const json = await res.json();
+  return json.message?.content?.trim() || '';
+}
+
 // ── POST /api/sofia/chat ──────────────────────────────────
-router.post('/chat', (req, res) => {
+router.post('/chat', async (req, res) => {
   const { message, sessionId, contexts } = req.body;
   if (!message?.trim()) return res.status(400).json({ error: 'message requerido' });
 
@@ -315,53 +337,42 @@ router.post('/chat', (req, res) => {
     ...(autoCtx ? [autoCtx] : []),
     ...(contexts || []),
   ];
-  const fullPrompt = buildPrompt(history, message, allContexts, waInstruction);
+  const userPrompt = buildUserPrompt(history, message, allContexts, waInstruction);
 
-  const escaped = fullPrompt.replace(/'/g, "'\\''");
-  const ephemeralKey = randomUUID();
-  const remoteCmd = `openclaw agent --agent gestor --session-key '${ephemeralKey}' --message '${escaped}' --json`;
+  try {
+    let text = await ollamaChat(PERSONA, userPrompt);
+    // Resolver nombres en marcadores WA → números E.164 desde la DB
+    text = resolveWaMarkers(text, db);
+    // Si se generó un marcador WA válido, limpiar el flujo WA de la sesión
+    if (/\[WA:\+\d+:[^\]]+\]/.test(text)) waFlows.delete(sessionKey);
+    // Convertir WA_NONUM en aviso legible y limpiar flujo
+    text = text.replace(/\[WA_NONUM:([^\]:]+):[^\]]+\]/g, (_, nombre) => {
+      waFlows.delete(sessionKey);
+      return `(No tengo el número de WhatsApp de ${nombre}. Cargalo en Recursos para poder enviarlo.)`;
+    });
+    history.push({ user: message, bot: text.slice(0, MAX_BOT_HISTORY_CHARS) });
+    if (history.length > MAX_HISTORY) history.shift();
+    res.json({ text, sessionKey });
 
-  execFile('ssh', sshArgs(remoteCmd), { timeout: 120000 }, (err, stdout, stderr) => {
-    if (err) {
-      console.error('[sofia] ssh error:', err.message, stderr?.slice(0, 200));
-      return res.status(500).json({ error: 'Error al conectar con Sofia' });
-    }
-    try {
-      const json = JSON.parse(stdout.trim());
-      let text = json.result?.payloads?.[0]?.text ?? '';
-      // Resolver nombres en marcadores WA → números E.164 desde la DB
-      text = resolveWaMarkers(text, db);
-      // Si se generó un marcador WA válido, limpiar el flujo WA de la sesión
-      if (/\[WA:\+\d+:[^\]]+\]/.test(text)) waFlows.delete(sessionKey);
-      // Convertir WA_NONUM en aviso legible y limpiar flujo
-      text = text.replace(/\[WA_NONUM:([^\]:]+):[^\]]+\]/g, (_, nombre) => {
-        waFlows.delete(sessionKey);
-        return `(No tengo el número de WhatsApp de ${nombre}. Cargalo en Recursos para poder enviarlo.)`;
-      });
-      history.push({ user: message, bot: text.slice(0, MAX_BOT_HISTORY_CHARS) });
-      if (history.length > MAX_HISTORY) history.shift();
-      res.json({ text, sessionKey });
-
-      // Persistir turno en SQLite (non-blocking)
-      setImmediate(() => {
-        try {
-          const pdb = getDb();
-          let conv = pdb.prepare('SELECT id FROM sofia_conversations WHERE session_key=?').get(sessionKey);
-          if (!conv) {
-            const r = pdb.prepare('INSERT INTO sofia_conversations (session_key) VALUES (?)').run(sessionKey);
-            conv = { id: r.lastInsertRowid };
-          } else {
-            pdb.prepare("UPDATE sofia_conversations SET updated_at=datetime('now') WHERE id=?").run(conv.id);
-          }
-          pdb.prepare('INSERT INTO sofia_messages (conversation_id, role, texto) VALUES (?,?,?)').run(conv.id, 'user', message);
-          pdb.prepare('INSERT INTO sofia_messages (conversation_id, role, texto) VALUES (?,?,?)').run(conv.id, 'bot', text);
-        } catch (pe) { console.error('[sofia/persist]', pe.message); }
-      });
-    } catch (e) {
-      console.error('[sofia] parse error:', e.message, stdout.slice(0, 300));
-      res.status(500).json({ error: 'Error al parsear respuesta de Sofia' });
-    }
-  });
+    // Persistir turno en SQLite (non-blocking)
+    setImmediate(() => {
+      try {
+        const pdb = getDb();
+        let conv = pdb.prepare('SELECT id FROM sofia_conversations WHERE session_key=?').get(sessionKey);
+        if (!conv) {
+          const r = pdb.prepare('INSERT INTO sofia_conversations (session_key) VALUES (?)').run(sessionKey);
+          conv = { id: r.lastInsertRowid };
+        } else {
+          pdb.prepare("UPDATE sofia_conversations SET updated_at=datetime('now') WHERE id=?").run(conv.id);
+        }
+        pdb.prepare('INSERT INTO sofia_messages (conversation_id, role, texto) VALUES (?,?,?)').run(conv.id, 'user', message);
+        pdb.prepare('INSERT INTO sofia_messages (conversation_id, role, texto) VALUES (?,?,?)').run(conv.id, 'bot', text);
+      } catch (pe) { console.error('[sofia/persist]', pe.message); }
+    });
+  } catch (err) {
+    console.error('[sofia] ollama error:', err.message);
+    res.status(500).json({ error: 'Error al conectar con Sofia' });
+  }
 });
 
 // ── DELETE /api/sofia/chat — limpiar historial ─────────────
@@ -575,19 +586,13 @@ router.delete('/conversations/:id', (req, res) => {
 });
 
 // ── GET /api/sofia/status ─────────────────────────────────
-router.get('/status', (req, res) => {
-  execFile('ssh', sshArgs('openclaw health --json'),
-    { timeout: 10000 },
-    (err, stdout) => {
-      if (err) return res.json({ online: false });
-      try {
-        const json = JSON.parse(stdout.trim());
-        res.json({ online: json.ok === true });
-      } catch {
-        res.json({ online: false });
-      }
-    }
-  );
+router.get('/status', async (req, res) => {
+  try {
+    const r = await fetch(`${OLLAMA_URL}/api/tags`, { signal: AbortSignal.timeout(5000) });
+    res.json({ online: r.ok });
+  } catch {
+    res.json({ online: false });
+  }
 });
 
 module.exports = router;

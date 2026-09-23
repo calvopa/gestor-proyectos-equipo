@@ -1,28 +1,21 @@
-const { execFile } = require('child_process');
-const { randomUUID } = require('crypto');
+const OLLAMA_URL   = process.env.OLLAMA_URL   || 'http://192.168.1.38:11434';
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen2.5:14b';
 
-const SSH_HOST = process.env.OPENCLAW_SSH_HOST || 'openclaw';
-const SSH_KEY  = process.env.OPENCLAW_SSH_KEY  || null;
-
-function query(prompt) {
-  return new Promise((resolve, reject) => {
-    const key     = randomUUID();
-    const escaped = prompt.replace(/'/g, "'\\''");
-    const args    = [];
-    if (SSH_KEY) args.push('-i', SSH_KEY);
-    args.push(
-      '-o', 'StrictHostKeyChecking=accept-new',
-      SSH_HOST,
-      `openclaw agent --agent gestor --session-key '${key}' --message '${escaped}' --json`
-    );
-    execFile('ssh', args, { timeout: 90000 }, (err, stdout) => {
-      if (err) return reject(err);
-      try {
-        const json = JSON.parse(stdout.trim());
-        resolve(json.result?.payloads?.[0]?.text?.trim() || '');
-      } catch (e) { reject(e); }
-    });
+async function query(prompt) {
+  const res = await fetch(`${OLLAMA_URL}/api/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: OLLAMA_MODEL,
+      prompt,
+      stream: false,
+      options: { temperature: 0.3, num_predict: 512 },
+    }),
+    signal: AbortSignal.timeout(90000),
   });
+  if (!res.ok) throw new Error(`Ollama HTTP ${res.status}`);
+  const json = await res.json();
+  return json.response?.trim() || '';
 }
 
 function parseStructured(raw) {
